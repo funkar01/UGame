@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>UGame: Pixelate Yourself</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="./assets/index-CD-4y0dR.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CpQXvD1o.css">
+    <script type="module" crossorigin src="./assets/index-rxzWRipY.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DcEZliev.css">
   </head>
   <body>
     <div id="app">
@@ -67,6 +67,11 @@
             • Shoot: <kbd style="background: #334155; padding: 2px 6px; border-radius: 4px;">F</kbd>
           </div>
 
+          <div id="mobile-instructions" class="hidden" style="background: rgba(59,130,246,0.1); padding: 1rem; border-radius: 12px; font-size: 0.95rem; line-height: 1.6; border: 1px solid rgba(59,130,246,0.3); margin-top: 1rem;">
+            <strong style="color: #60a5fa; display: block; margin-bottom: 0.5rem;">📱 Mobile Controls:</strong>
+            Use the on-screen Gamepad to Move, Jump, and Shoot!
+          </div>
+
           <button id="btn-start-game" class="btn action hidden" style="margin-top: 1.5rem; width: 100%;">START COMBAT</button>
         </div>
       </div>
@@ -74,6 +79,17 @@
       <!-- Game Container -->
       <div id="game-container" class="hidden">
         <canvas id="game-canvas" width="800" height="600"></canvas>
+        
+        <div id="mobile-gamepad" class="hidden">
+          <div class="dpad">
+            <button id="btn-left" class="gamepad-btn">◀</button>
+            <button id="btn-right" class="gamepad-btn">▶</button>
+          </div>
+          <div class="action-pad">
+            <button id="btn-shoot" class="gamepad-btn shoot-btn">🎯</button>
+            <button id="btn-jump" class="gamepad-btn jump-btn">▲</button>
+          </div>
+        </div>
       </div>
       
     </div>
