@@ -12,7 +12,7 @@ export class Game {
     this.ctx = canvas.getContext('2d');
     this.input = new Input();
     this.map = new GameMap();
-    
+
     const spawnX = 80 + Math.floor(Math.random() * 60);
     this.player = new Player(spawnX, 100, avatarDataUrl, team);
     this.avatarDataUrl = avatarDataUrl;
@@ -21,7 +21,7 @@ export class Game {
     this.isRunning = false;
 
     // Networking
-    this.socket = null;
+    this.socket = io('https://ugame-2er9.onrender.com');
     this.remotePlayers = {};
     this.lastSyncX = -1;
     this.lastSyncY = -1;
@@ -120,11 +120,11 @@ export class Game {
     this.lastTime = timestamp;
 
     this.input.update(); // Update input state
-    
+
     if (!this.isGameOver) {
       // Prevent massive delta times (e.g. from tab switching)
-      if (dt > 0.1) dt = 0.1; 
-      
+      if (dt > 0.1) dt = 0.1;
+
       // Fixed time step loop to prevent tunneling through the floor
       let timeAccumulated = dt;
       while (timeAccumulated > 0) {
@@ -133,7 +133,7 @@ export class Game {
         timeAccumulated -= step;
       }
     }
-    
+
     this.draw();
 
     requestAnimationFrame((t) => this.loop(t));
@@ -155,7 +155,7 @@ export class Game {
         const dirX = this.player.facingRight ? 1 : -1;
         const bX = this.player.facingRight ? this.player.x + this.player.width : this.player.x - 12;
         const bY = this.player.y + this.player.headSize + 6;
-        
+
         this.bullets.push(new Bullet(bX, bY, dirX, this.socket.id));
         this.socket.emit('shoot', { x: bX, y: bY, dirX: dirX });
         this.fireTimer = this.fireRate;
@@ -187,13 +187,13 @@ export class Game {
       if (b.active && b.ownerId === this.socket.id) {
         for (let id in this.remotePlayers) {
           const rp = this.remotePlayers[id];
-          if (rp.isAlive) { 
+          if (rp.isAlive) {
             // Simple AABB collision
             if (b.x < rp.x + rp.width &&
-                b.x + b.width > rp.x &&
-                b.y < rp.y + rp.height &&
-                b.y + b.height > rp.y) {
-              
+              b.x + b.width > rp.x &&
+              b.y < rp.y + rp.height &&
+              b.y + b.height > rp.y) {
+
               b.active = false; // Destroy bullet on hit
               if (rp.team !== this.player.team) {
                 this.socket.emit('hitPlayer', id); // Only damage enemies
@@ -213,28 +213,28 @@ export class Game {
   draw() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.map.draw(this.ctx);
-    
+
     Object.values(this.remotePlayers).forEach(rp => rp.draw(this.ctx));
     this.bullets.forEach(b => b.draw(this.ctx));
-    
+
     this.player.draw(this.ctx);
 
     if (!this.player.isAlive && !this.isGameOver) {
       this.ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      this.ctx.fillRect(0,0, this.canvas.width, this.canvas.height);
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
       this.ctx.fillStyle = 'white';
       this.ctx.font = '48px Outfit, sans-serif';
       this.ctx.textAlign = 'center';
-      this.ctx.fillText("YOU DIED", this.canvas.width/2, this.canvas.height/2);
+      this.ctx.fillText("YOU DIED", this.canvas.width / 2, this.canvas.height / 2);
     }
 
     if (this.isGameOver) {
       this.ctx.fillStyle = 'rgba(0,0,0,0.8)';
-      this.ctx.fillRect(0,0, this.canvas.width, this.canvas.height);
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
       this.ctx.fillStyle = this.gameOverMessage.includes('Red') ? '#ef4444' : '#3b82f6';
       this.ctx.font = '64px Outfit, sans-serif';
       this.ctx.textAlign = 'center';
-      this.ctx.fillText(this.gameOverMessage, this.canvas.width/2, this.canvas.height/2);
+      this.ctx.fillText(this.gameOverMessage, this.canvas.width / 2, this.canvas.height / 2);
     }
   }
 }
