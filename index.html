@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>UGame: Pixelate Yourself</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="./assets/index-D7Mo3Z-G.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DcEZliev.css">
+    <script type="module" crossorigin src="./assets/index-fPoHK3a7.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-UTXquuiS.css">
   </head>
   <body>
     <div id="app">
@@ -75,12 +75,29 @@
         
         <div id="mobile-gamepad" class="hidden">
           <div class="dpad">
-            <button id="btn-left" class="gamepad-btn">◀</button>
-            <button id="btn-right" class="gamepad-btn">▶</button>
+            <button id="btn-left" class="gamepad-btn">
+              <svg viewBox="0 0 24 24" width="40" height="40" fill="white">
+                <path d="M4 12 l8 -8 v5 h8 v6 h-8 v5 z"/>
+              </svg>
+            </button>
+            <button id="btn-right" class="gamepad-btn">
+              <svg viewBox="0 0 24 24" width="40" height="40" fill="white">
+                <path d="M20 12 l-8 -8 v5 h-8 v6 h8 v5 z"/>
+              </svg>
+            </button>
           </div>
           <div class="action-pad">
-            <button id="btn-shoot" class="gamepad-btn shoot-btn">🎯</button>
-            <button id="btn-jump" class="gamepad-btn jump-btn">▲</button>
+            <button id="btn-shoot" class="gamepad-btn shoot-btn">
+              <svg viewBox="0 0 24 24" width="40" height="40" fill="white">
+                <path d="M12 2 L14.5 8 L21 8.5 L16.5 13 L18 19.5 L12 16.5 L6 19.5 L7.5 13 L3 8.5 L9.5 8 Z" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+                <circle cx="12" cy="12" r="3" fill="white" />
+              </svg>
+            </button>
+            <button id="btn-jump" class="gamepad-btn jump-btn">
+              <svg viewBox="0 0 24 24" width="40" height="40" fill="white">
+                <path d="M12 4 l-8 8 h5 v8 h6 v-8 h5 z"/>
+              </svg>
+            </button>
           </div>
         </div>
       </div>
