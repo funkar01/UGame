@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>UGame: Pixelate Yourself</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="./assets/index-Da28jrZT.js"></script>
+    <script type="module" crossorigin src="./assets/index-CrxvC7DC.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-BotEtXot.css">
   </head>
   <body>
@@ -44,6 +44,15 @@
           <canvas id="face-preview" width="64" height="64"></canvas>
           <button id="btn-next" class="btn action">Continue</button>
           <button id="btn-retake" class="btn secondary" style="margin-top:0.5rem; width:100%;">Retake</button>
+        </div>
+
+        <div id="audio-section" class="hidden" style="margin-top: 1rem; text-align: center;">
+          <h3 style="margin-bottom: 0.5rem;">Record Battle Cry</h3>
+          <p style="font-size: 0.9rem; margin-bottom: 1rem;">Hold to record a funny hit sound (max 2s)!</p>
+          <button id="btn-record-audio" class="btn primary" style="width:100%; margin-bottom: 1rem; user-select: none; -webkit-user-select: none;">🎤 Hold to Record</button>
+          <audio id="audio-preview" controls class="hidden" style="width: 100%; margin-bottom: 1rem;"></audio>
+          <button id="btn-audio-next" class="btn action">Continue</button>
+          <button id="btn-audio-skip" class="btn secondary" style="margin-top:0.5rem; width:100%;">Skip</button>
         </div>
 
         <div id="mode-section" class="hidden" style="text-align: left; margin-top: 1rem;">
