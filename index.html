@@ -5,9 +5,9 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>UGame: Pixelate Yourself</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="./assets/index-CbDEhqHt.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-BotEtXot.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="./assets/index-Di5UJPI5.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DKBLZ-R9.css">
   </head>
   <body>
     <div id="app">
@@ -82,11 +82,15 @@
       <div id="game-container" class="hidden" style="position: relative;">
         <canvas id="game-canvas" width="800" height="600"></canvas>
         
-        <div id="game-over-overlay" class="hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10;">
-          <h1 id="game-over-text" style="color: white; font-size: 3rem; margin-bottom: 2rem; text-align: center;"></h1>
-          <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
-            <button id="btn-restart" class="btn primary">Restart</button>
-            <button id="btn-quit" class="btn secondary">Quit</button>
+        <div id="game-over-overlay" class="hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10; backdrop-filter: blur(8px);">
+          <div id="game-over-card" style="display: none; flex-direction: column; align-items: center; background: rgba(30, 41, 59, 0.7); padding: 2rem; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5); max-width: 400px; width: 90%; text-align: center; transition: all 0.3s ease;">
+            <img id="game-over-image" src="" alt="Game Over" style="width: 100%; max-height: 200px; border-radius: 16px; margin-bottom: 1.5rem; object-fit: cover; border: 2px solid rgba(255,255,255,0.05); box-shadow: 0 10px 20px rgba(0,0,0,0.3);">
+            <h1 id="game-over-text" style="color: white; font-size: 2.5rem; margin-top: 0; margin-bottom: 0.5rem; font-weight: 800; letter-spacing: 1px;"></h1>
+            <p id="game-over-subtitle" style="color: #94a3b8; font-size: 1.1rem; margin-top: 0; margin-bottom: 1.5rem; line-height: 1.4;"></p>
+            <div style="display: flex; gap: 1rem; width: 100%; justify-content: center;">
+              <button id="btn-restart" class="btn primary" style="flex: 1; padding: 1rem; font-size: 1.1rem;">Restart</button>
+              <button id="btn-quit" class="btn secondary" style="flex: 1; padding: 1rem; font-size: 1.1rem;">Quit</button>
+            </div>
           </div>
         </div>
         

@@ -121,7 +121,7 @@ export class Game {
       else if (diedTeam === 'blue') this.scoreRed++;
 
       const winner = diedTeam === 'red' ? 'Blue' : 'Red';
-      this.triggerGameOver(winner);
+      console.log('TRIGGERING GAME OVER'); try { this.triggerGameOver(winner); console.log('GAME OVER TRIGGERED'); } catch(e) { console.error('GAME OVER ERROR:', e); }
     });
 
     this.socket.on('playerDisconnected', (id) => {
@@ -139,17 +139,40 @@ export class Game {
     if (this.isGameOver) return;
     this.isGameOver = true;
     audio.stopBGM();
-    this.gameOverMessage = `${winner} Team Wins!`;
+    
+    const isWinner = this.player.team.toLowerCase() === winner.toLowerCase();
+    this.gameOverMessage = isWinner ? 'Victory!' : 'Defeat';
     
     const overlay = document.getElementById('game-over-overlay');
+    const card = document.getElementById('game-over-card');
+    const image = document.getElementById('game-over-image');
     const text = document.getElementById('game-over-text');
-    if (overlay && text) {
+    const subtitle = document.getElementById('game-over-subtitle');
+
+    if (overlay && card && image && text && subtitle) {
       text.innerText = this.gameOverMessage;
-      text.style.color = this.player.team.toLowerCase() === winner.toLowerCase() ? '#10b981' : '#ef4444';
+      
+      if (isWinner) {
+        text.style.color = '#10b981';
+        subtitle.innerText = `${winner} Team dominated the match.`;
+        image.src = './assets/winner_card.png';
+        card.style.background = 'rgba(16, 185, 129, 0.1)';
+        card.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+        card.style.boxShadow = '0 20px 40px rgba(16, 185, 129, 0.2)';
+      } else {
+        text.style.color = '#ef4444';
+        subtitle.innerText = `${winner} Team won. Better luck next time.`;
+        image.src = './assets/loser_card.png';
+        card.style.background = 'rgba(239, 68, 68, 0.1)';
+        card.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+        card.style.boxShadow = '0 20px 40px rgba(239, 68, 68, 0.2)';
+      }
+      
+      card.style.display = 'flex';
       overlay.classList.remove('hidden');
     }
 
-    if (this.player.team.toLowerCase() === winner.toLowerCase()) {
+    if (isWinner) {
       audio.playWin();
       this.player.dancing = true;
     } else {
@@ -166,9 +189,10 @@ export class Game {
     this.player.y = 100;
     this.bullets = [];
     this.particles = [];
+    this.remotePlayers = {};
     this.isGameOver = false;
     
-    // Notify server we are respawning by re-joining
+    // Notify server we are respawning
     if (this.socket && this.socket.connected) {
       this.socket.emit('join', {
         x: this.player.x,
