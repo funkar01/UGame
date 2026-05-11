@@ -257,10 +257,25 @@ export class Game {
   update(dt) {
     this.player.update(dt, this.input, this.map);
 
+    // Auto-respawn when falling off the map
     if (this.player.isAlive && this.player.y > 600) {
       this.player.health = 0;
       this.player.isAlive = false;
       if (this.socket) this.socket.emit('suicide');
+      
+      setTimeout(() => {
+        if (!this.isGameOver) {
+          this.player.health = 100;
+          this.player.isAlive = true;
+          this.player.x = 80 + Math.floor(Math.random() * 60);
+          this.player.y = 100;
+          this.player.velocityY = 0;
+          if (this.socket) {
+             // Let the server know we're back alive so others see us
+             this.socket.emit('join', { team: this.player.team, avatar: this.avatarDataUrl });
+          }
+        }
+      }, 3000);
     }
 
     if (this.player.isAlive) {
