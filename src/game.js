@@ -119,6 +119,9 @@ export class Game {
 
       if (diedTeam === 'red') this.scoreBlue++;
       else if (diedTeam === 'blue') this.scoreRed++;
+
+      const winner = diedTeam === 'red' ? 'Blue' : 'Red';
+      this.triggerGameOver(winner);
     });
 
     this.socket.on('playerDisconnected', (id) => {
@@ -128,28 +131,31 @@ export class Game {
     });
 
     this.socket.on('gameOver', (message) => {
-      this.isGameOver = true;
-      audio.stopBGM();
-      this.gameOverMessage = message;
-      
-      const overlay = document.getElementById('game-over-overlay');
-      const text = document.getElementById('game-over-text');
-      if (overlay && text) {
-        text.innerText = this.gameOverMessage;
-        text.style.color = message.includes('Red') ? '#ef4444' : '#3b82f6';
-        overlay.classList.remove('hidden');
-      }
-
-      if (message.toLowerCase().includes(this.player.team.toLowerCase())) {
-        audio.playWin();
-        this.player.dancing = true;
-      } else {
-        audio.playLose();
-      }
+      // Handled locally now via triggerGameOver
     });
   }
 
+  triggerGameOver(winner) {
+    if (this.isGameOver) return;
+    this.isGameOver = true;
+    audio.stopBGM();
+    this.gameOverMessage = `${winner} Team Wins!`;
+    
+    const overlay = document.getElementById('game-over-overlay');
+    const text = document.getElementById('game-over-text');
+    if (overlay && text) {
+      text.innerText = this.gameOverMessage;
+      text.style.color = this.player.team.toLowerCase() === winner.toLowerCase() ? '#10b981' : '#ef4444';
+      overlay.classList.remove('hidden');
+    }
 
+    if (this.player.team.toLowerCase() === winner.toLowerCase()) {
+      audio.playWin();
+      this.player.dancing = true;
+    } else {
+      audio.playLose();
+    }
+  }
 
   rematch() {
     // Keep scores to track round wins!
@@ -226,14 +232,6 @@ export class Game {
 
   update(dt) {
     this.player.update(dt, this.input, this.map);
-
-    if (!this.player.isAlive && !this.isGameOver) {
-      this.respawnTimer = (this.respawnTimer || 0) + dt;
-      if (this.respawnTimer > 3) {
-        this.respawnTimer = 0;
-        this.rematch();
-      }
-    }
 
     if (this.player.isAlive && this.player.y > 600) {
       this.player.health = 0;
