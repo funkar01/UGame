@@ -24,14 +24,18 @@ export class AvatarBuilder {
       }
 
       const segmenterConfig = {
-        architecture: 'MobileNetV1',
-        outputStride: 16,
-        multiplier: 0.50,
-        quantBytes: 2
+        runtime: 'tfjs',
+        modelType: 'general'
       };
       this.segmenter = await bodySegmentation.createSegmenter(
-        bodySegmentation.SupportedModels.BodyPix,
+        bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation,
         segmenterConfig
+      );
+
+      const detectorConfig = { runtime: 'tfjs' };
+      this.faceDetector = await faceDetection.createDetector(
+        faceDetection.SupportedModels.MediaPipeFaceDetector,
+        detectorConfig
       );
       this.isModelLoading = false;
       document.getElementById('loading-overlay').classList.add('hidden');
@@ -152,19 +156,22 @@ export class AvatarBuilder {
 
     let minX = procWidth, minY = procHeight, maxX = 0, maxY = 0;
 
-    if (!this.segmenter) {
-      console.warn("AI segmenter is not available. Using center crop fallback.");
+    if (!this.segmenter || !this.faceDetector) {
+      console.warn("AI models not available. Using center crop fallback.");
       const size = Math.min(procWidth, procHeight);
       minX = (procWidth - size) / 2;
       minY = (procHeight - size) / 2;
       maxX = minX + size;
       maxY = minY + size;
     } else {
-      // Segment using TFJS
-      const segmentationResult = await this.segmenter.segmentPeople(procCanvas, {
+      // Run both segmentation and face detection concurrently
+      const segmentationPromise = this.segmenter.segmentPeople(procCanvas, {
         multiSegmentation: false,
         segmentBodyParts: false
       });
+      const facePromise = this.faceDetector.estimateFaces(procCanvas, { flipHorizontal: false });
+
+      const [segmentationResult, faces] = await Promise.all([segmentationPromise, facePromise]);
 
       const imageData = procCtx.getImageData(0, 0, procWidth, procHeight);
       const data = imageData.data;
@@ -174,92 +181,51 @@ export class AvatarBuilder {
       if (segmentationResult.length > 0) {
         const maskData = await segmentationResult[0].mask.toImageData();
         const maskArray = maskData.data;
-        
-        let bodyMinX = procWidth, bodyMaxX = 0, bodyMinY = procHeight, bodyMaxY = 0;
 
-        // Pass 1: Find the full bounding box of the person
-        for (let y = 0; y < procHeight; y++) {
-          for (let x = 0; x < procWidth; x++) {
-            const index = (y * procWidth + x) * 4;
-            const isForeground = maskArray[index + 3] > 128 || maskArray[index] > 128;
-            if (isForeground) {
-              if (x < bodyMinX) bodyMinX = x;
-              if (y < bodyMinY) bodyMinY = y;
-              if (x > bodyMaxX) bodyMaxX = x;
-              if (y > bodyMaxY) bodyMaxY = y;
-            }
-          }
+        let faceBox = null;
+        if (faces && faces.length > 0) {
+          faceBox = faces[0].box;
         }
 
-        // Pass 2: Dynamically find the head width by scanning downwards
-        let maxHeadWidth = 10;
-        for (let y = bodyMinY; y <= bodyMaxY; y++) {
-          // Stop scanning once we've gone down far enough to capture the cheekbones (1.15x current max width)
-          if (y > bodyMinY + maxHeadWidth * 1.15) {
-            break;
-          }
+        let chinCutoffY = procHeight;
+        let cropMinX = 0;
+        let cropMaxX = procWidth;
+        let cropMinY = 0;
+
+        if (faceBox) {
+          // A precise bounding box from the face detector solves the long hair/dress problem.
+          // We expand it slightly to include the top and sides of the hair, but cut strictly at the chin.
+          cropMinY = faceBox.yMin - faceBox.height * 0.7; // Top hair
+          chinCutoffY = faceBox.yMin + faceBox.height * 1.15; // Chin/Jawline
           
-          let rowMinX = procWidth, rowMaxX = 0;
-          for (let x = bodyMinX; x <= bodyMaxX; x++) {
-            const index = (y * procWidth + x) * 4;
-            const isForeground = maskArray[index + 3] > 128 || maskArray[index] > 128;
-            if (isForeground) {
-              if (x < rowMinX) rowMinX = x;
-              if (x > rowMaxX) rowMaxX = x;
+          cropMinX = faceBox.xMin - faceBox.width * 0.6; // Left hair
+          cropMaxX = faceBox.xMin + faceBox.width * 1.6; // Right hair
+        } else {
+          // Fallback if face detection fails: use old silhouette heuristic
+          let bodyMinY = procHeight;
+          for (let y = 0; y < procHeight; y++) {
+            for (let x = 0; x < procWidth; x++) {
+              if (maskArray[(y * procWidth + x) * 4 + 3] > 128) {
+                if (y < bodyMinY) bodyMinY = y;
+              }
             }
           }
-          
-          if (rowMinX <= rowMaxX) {
-            const rowWidth = rowMaxX - rowMinX;
-            if (rowWidth > maxHeadWidth) {
-              maxHeadWidth = rowWidth;
-            }
-          }
+          chinCutoffY = bodyMinY + procWidth * 0.5; // Very rough guess
         }
 
-        // 1.45 is the optimal ratio to ensure the chin is included but neck is chopped
-        const chinCutoffY = bodyMinY + maxHeadWidth * 1.45;
-
-        // Pass 3: Apply the mask, crop out the body, and laterally erode to remove background halo borders
+        // Apply the mask and precise face bounding box
         for (let y = 0; y < procHeight; y++) {
-          let rowFirstX = -1;
-          let rowLastX = -1;
-          // First, find the horizontal bounds of the foreground on this specific row
-          for (let x = 0; x < procWidth; x++) {
-            const index = (y * procWidth + x) * 4;
-            const isForeground = maskArray[index + 3] > 128 || maskArray[index] > 128;
-            if (isForeground && y <= chinCutoffY) {
-              if (rowFirstX === -1) rowFirstX = x;
-              rowLastX = x;
-            }
-          }
-          
-          // Calculate how many pixels to shave off the left and right to remove the background "border"
-          let trimAmount = 0;
-          if (rowFirstX !== -1) {
-            trimAmount = Math.max(1, Math.floor((rowLastX - rowFirstX) * 0.05));
-          }
-
           for (let x = 0; x < procWidth; x++) {
             const index = (y * procWidth + x) * 4;
             let isForeground = maskArray[index + 3] > 128 || maskArray[index] > 128;
 
-            if (y > chinCutoffY) {
-              isForeground = false; // Chop off the neck and shoulders
-            }
-
-            // Erode edges to remove background bleeding
-            if (isForeground && rowFirstX !== -1) {
-              if (x < rowFirstX + trimAmount || x > rowLastX - trimAmount) {
-                isForeground = false;
-              }
+            // Apply strict face boundary cuts
+            if (y > chinCutoffY || y < cropMinY || x < cropMinX || x > cropMaxX) {
+              isForeground = false;
             }
 
             if (!isForeground) {
-              data[index] = 0;     // Red
-              data[index + 1] = 0; // Green
-              data[index + 2] = 0; // Blue
-              data[index + 3] = 0; // Transparent alpha
+              data[index + 3] = 0; // Transparent alpha, leave RGB to avoid dark halo
             } else {
               foundPixels = true;
               if (x < minX) minX = x;
