@@ -7,11 +7,12 @@ import { audio } from './audio.js';
 import { io } from 'socket.io-client';
 
 export class Game {
-  constructor(canvas, playerFaceDataUrl, playerTeam, customAudioUrl) {
+  constructor(canvas, playerFaceDataUrl, playerTeam, customAudioUrl, roomId = '') {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.input = new Input();
     this.map = new GameMap();
+    this.roomId = roomId;
 
     const spawnX = 80 + Math.floor(Math.random() * 60);
     this.player = new Player(spawnX, 100, playerFaceDataUrl, playerTeam);
@@ -46,19 +47,20 @@ export class Game {
   start() {
     this.isRunning = true;
     this.initNetwork();
-    audio.playBGM();
     requestAnimationFrame((t) => this.loop(t));
   }
 
   initNetwork() {
-    this.socket = io('https://ugame-2er9.onrender.com');
+    const serverUrl = window.location.hostname ? `http://${window.location.hostname}:3000` : 'http://localhost:3000';
+    this.socket = io(serverUrl);
 
     this.socket.on('connect', () => {
       this.socket.emit('join', {
         x: this.player.x,
         y: this.player.y,
         faceDataUrl: this.avatarDataUrl,
-        team: this.player.team
+        team: this.player.team,
+        roomId: this.roomId
       });
     });
 
@@ -66,7 +68,9 @@ export class Game {
       Object.keys(players).forEach(id => {
         if (id !== this.socket.id) {
           const p = players[id];
-          this.remotePlayers[id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
+          if (!this.roomId || p.roomId === this.roomId) {
+            this.remotePlayers[id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
+          }
         }
       });
     });
@@ -74,7 +78,9 @@ export class Game {
     this.socket.on('newPlayer', (info) => {
       if (info.id !== this.socket.id) {
         const p = info.playerData;
-        this.remotePlayers[info.id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
+        if (!this.roomId || p.roomId === this.roomId) {
+          this.remotePlayers[info.id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
+        }
       }
     });
 
@@ -120,8 +126,23 @@ export class Game {
       if (diedTeam === 'red') this.scoreBlue++;
       else if (diedTeam === 'blue') this.scoreRed++;
 
-      const winner = diedTeam === 'red' ? 'Blue' : 'Red';
-      console.log('TRIGGERING GAME OVER'); try { this.triggerGameOver(winner); console.log('GAME OVER TRIGGERED'); } catch(e) { console.error('GAME OVER ERROR:', e); }
+      let redAlive = (this.player.team === 'red' && this.player.isAlive) ? 1 : 0;
+      let blueAlive = (this.player.team === 'blue' && this.player.isAlive) ? 1 : 0;
+      
+      Object.values(this.remotePlayers).forEach(rp => {
+        if (rp.isAlive) {
+          if (rp.team === 'red') redAlive++;
+          if (rp.team === 'blue') blueAlive++;
+        }
+      });
+
+      if (redAlive === 0 && blueAlive > 0) {
+        console.log('TRIGGERING GAME OVER - Blue Wins');
+        try { this.triggerGameOver('Blue'); } catch(e) { console.error('GAME OVER ERROR:', e); }
+      } else if (blueAlive === 0 && redAlive > 0) {
+        console.log('TRIGGERING GAME OVER - Red Wins');
+        try { this.triggerGameOver('Red'); } catch(e) { console.error('GAME OVER ERROR:', e); }
+      }
     });
 
     this.socket.on('playerDisconnected', (id) => {
@@ -198,13 +219,13 @@ export class Game {
         x: this.player.x,
         y: this.player.y,
         faceDataUrl: this.avatarDataUrl,
-        team: this.player.team
+        team: this.player.team,
+        roomId: this.roomId
       });
     }
 
     document.getElementById('game-over-overlay').classList.add('hidden');
     audio.stopBGM();
-    audio.playBGM();
   }
 
   spawnParticles(x, y, color, count = 10) {
@@ -272,7 +293,13 @@ export class Game {
           this.player.velocityY = 0;
           if (this.socket) {
              // Let the server know we're back alive so others see us
-             this.socket.emit('join', { team: this.player.team, avatar: this.avatarDataUrl });
+             this.socket.emit('join', {
+               x: this.player.x,
+               y: this.player.y,
+               faceDataUrl: this.avatarDataUrl,
+               team: this.player.team,
+               roomId: this.roomId
+             });
           }
         }
       }, 3000);
@@ -381,15 +408,25 @@ export class Game {
     this.ctx.font = '24px Outfit, sans-serif';
     this.ctx.fontWeight = 'bold';
 
-    // Red Score
+    let redCount = (this.player.team === 'red' && this.player.isAlive) ? 1 : 0;
+    let blueCount = (this.player.team === 'blue' && this.player.isAlive) ? 1 : 0;
+    
+    Object.values(this.remotePlayers).forEach(rp => {
+      if (rp.isAlive) {
+        if (rp.team === 'red') redCount++;
+        if (rp.team === 'blue') blueCount++;
+      }
+    });
+
+    // Red Score & Count
     this.ctx.fillStyle = '#ef4444';
     this.ctx.textAlign = 'left';
-    this.ctx.fillText(`Red Team: ${this.scoreRed}`, 20, 40);
+    this.ctx.fillText(`Red Players: ${redCount}`, 20, 40);
 
-    // Blue Score
+    // Blue Score & Count
     this.ctx.fillStyle = '#3b82f6';
     this.ctx.textAlign = 'right';
-    this.ctx.fillText(`Blue Team: ${this.scoreBlue}`, this.canvas.width - 20, 40);
+    this.ctx.fillText(`Blue Players: ${blueCount}`, this.canvas.width - 20, 40);
 
     if (!this.player.isAlive && !this.isGameOver) {
       this.ctx.fillStyle = 'rgba(0,0,0,0.5)';

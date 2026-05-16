@@ -1,5 +1,3 @@
-import { ImageSegmenter, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs";
-
 export class AvatarBuilder {
   constructor(videoElement, previewCanvas) {
     this.video = videoElement;
@@ -17,25 +15,34 @@ export class AvatarBuilder {
 
   async initModel() {
     try {
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
-      );
+      // First try WebGL, fallback to CPU
+      try {
+        await tf.setBackend('webgl');
+      } catch(e) {
+        console.warn('WebGL failed, falling back to CPU for TFJS', e);
+        await tf.setBackend('cpu');
+      }
 
-      this.segmenter = await ImageSegmenter.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite",
-          delegate: "CPU"
-        },
-        runningMode: "IMAGE",
-        outputCategoryMask: true,
-        outputConfidenceMasks: false
-      });
-      
+      const segmenterConfig = {
+        architecture: 'MobileNetV1',
+        outputStride: 16,
+        multiplier: 0.50,
+        quantBytes: 2
+      };
+      this.segmenter = await bodySegmentation.createSegmenter(
+        bodySegmentation.SupportedModels.BodyPix,
+        segmenterConfig
+      );
       this.isModelLoading = false;
       document.getElementById('loading-overlay').classList.add('hidden');
     } catch (e) {
       console.error("Failed to load segmenter model", e);
-      document.getElementById('loading-text').innerText = "Failed to load AI.";
+      document.getElementById('loading-text').innerText = "Failed to load AI. Using fallback.";
+      setTimeout(() => {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) overlay.classList.add('hidden');
+      }, 1500);
+      this.isModelLoading = false;
     }
   }
 
@@ -108,7 +115,7 @@ export class AvatarBuilder {
   }
 
   async processImageWithSegmenter(source) {
-    if (this.isModelLoading || !this.segmenter) {
+    if (this.isModelLoading) {
       alert("AI model is still loading, please wait a moment.");
       return null;
     }
@@ -123,7 +130,6 @@ export class AvatarBuilder {
       oHeight = source.naturalHeight || source.height;
     }
 
-    // Resize to a manageable max dimension (e.g. 512) for mobile safety and performance
     const MAX_DIM = 512;
     let scale = 1;
     if (oWidth > MAX_DIM || oHeight > MAX_DIM) {
@@ -132,13 +138,11 @@ export class AvatarBuilder {
     const procWidth = Math.floor(oWidth * scale);
     const procHeight = Math.floor(oHeight * scale);
 
-    // Create a temporary canvas for the scaled source image
     const procCanvas = document.createElement('canvas');
     procCanvas.width = procWidth;
     procCanvas.height = procHeight;
-    const procCtx = procCanvas.getContext('2d');
+    const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
     
-    // Draw the scaled image (this also bakes in EXIF rotation on mobile)
     if (source instanceof HTMLVideoElement) {
       procCtx.translate(procWidth, 0);
       procCtx.scale(-1, 1);
@@ -146,70 +150,71 @@ export class AvatarBuilder {
     procCtx.drawImage(source, 0, 0, procWidth, procHeight);
     procCtx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // Segment the scaled image
-    const segmentationResult = this.segmenter.segment(procCanvas);
-    const mask = segmentationResult.categoryMask; 
-    
-    const maskArr = mask.getAsUint8Array();
-    const maskW = mask.width;
-    const maskH = mask.height;
-
-    const imageData = procCtx.getImageData(0, 0, procWidth, procHeight);
-    const data = imageData.data;
-    
-    // Categories: 1: hair, 3: face
-    const keepClasses = new Set([1, 3]);
-
     let minX = procWidth, minY = procHeight, maxX = 0, maxY = 0;
-    let foundPixels = false;
 
-    for (let y = 0; y < procHeight; y++) {
-      for (let x = 0; x < procWidth; x++) {
-        // Map (x, y) from procCanvas to mask coordinates
-        const mx = Math.floor((x / procWidth) * maskW);
-        const my = Math.floor((y / procHeight) * maskH);
-        const category = maskArr[my * maskW + mx];
-
-        const index = (y * procWidth + x) * 4;
-
-        if (!keepClasses.has(category)) {
-          // Make background/body/clothes transparent
-          data[index + 3] = 0; // Alpha channel
-        } else {
-          // Keep pixel, track bounding box
-          foundPixels = true;
-          if (x < minX) minX = x;
-          if (y < minY) minY = y;
-          if (x > maxX) maxX = x;
-          if (y > maxY) maxY = y;
-        }
-      }
-    }
-
-    if (!foundPixels) {
-      console.warn("No face/hair found in the image.");
-      // Fallback: just use a center square
+    if (!this.segmenter) {
+      console.warn("AI segmenter is not available. Using center crop fallback.");
       const size = Math.min(procWidth, procHeight);
       minX = (procWidth - size) / 2;
       minY = (procHeight - size) / 2;
       maxX = minX + size;
       maxY = minY + size;
     } else {
-      // Put the modified transparent image data back
-      procCtx.putImageData(imageData, 0, 0);
+      // Segment using TFJS
+      const segmentationResult = await this.segmenter.segmentPeople(procCanvas, {
+        multiSegmentation: false,
+        segmentBodyParts: false
+      });
 
-      // Add a small 5% padding around the extracted face/hair
-      const padding = Math.max(maxX - minX, maxY - minY) * 0.05;
-      minX = Math.max(0, minX - padding);
-      minY = Math.max(0, minY - padding);
-      maxX = Math.min(procWidth, maxX + padding);
-      maxY = Math.min(procHeight, maxY + padding);
+      const imageData = procCtx.getImageData(0, 0, procWidth, procHeight);
+      const data = imageData.data;
+      
+      let foundPixels = false;
+
+      if (segmentationResult.length > 0) {
+        const maskData = await segmentationResult[0].mask.toImageData();
+        const maskArray = maskData.data;
+
+        for (let y = 0; y < procHeight; y++) {
+          for (let x = 0; x < procWidth; x++) {
+            const index = (y * procWidth + x) * 4;
+            // maskArray usually stores confidence or binary in A channel, or R channel
+            // In body-segmentation TFJS, it returns ImageData where alpha channel or R/G/B channel > 0 for foreground.
+            const isForeground = maskArray[index + 3] > 128 || maskArray[index] > 128;
+
+            if (!isForeground) {
+              data[index + 3] = 0; // Transparent background
+            } else {
+              foundPixels = true;
+              if (x < minX) minX = x;
+              if (y < minY) minY = y;
+              if (x > maxX) maxX = x;
+              if (y > maxY) maxY = y;
+            }
+          }
+        }
+      }
+
+      if (!foundPixels) {
+        console.warn("No face/hair found in the image.");
+        const size = Math.min(procWidth, procHeight);
+        minX = (procWidth - size) / 2;
+        minY = (procHeight - size) / 2;
+        maxX = minX + size;
+        maxY = minY + size;
+      } else {
+        procCtx.putImageData(imageData, 0, 0);
+        const padding = Math.max(maxX - minX, maxY - minY) * 0.05;
+        minX = Math.max(0, minX - padding);
+        minY = Math.max(0, minY - padding);
+        maxX = Math.min(procWidth, maxX + padding);
+        maxY = Math.min(procHeight, maxY + padding);
+      }
     }
 
     const faceWidth = maxX - minX;
     const faceHeight = maxY - minY;
 
-    // We want the final bounding box to be roughly square so it doesn't squish weirdly
     const maxDim = Math.max(faceWidth, faceHeight);
     const centerX = minX + faceWidth / 2;
     const centerY = minY + faceHeight / 2;
@@ -218,7 +223,6 @@ export class AvatarBuilder {
     let finalY = Math.max(0, centerY - maxDim / 2);
     let finalSize = maxDim;
 
-    // Prevent going out of bounds
     if (finalX + finalSize > procWidth) finalSize = procWidth - finalX;
     if (finalY + finalSize > procHeight) finalSize = procHeight - finalY;
 

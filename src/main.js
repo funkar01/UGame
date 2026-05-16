@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnRetake = document.getElementById('btn-retake');
   const btnNext = document.getElementById('btn-next');
   const btnStartGame = document.getElementById('btn-start-game');
+  const inputRoomId = document.getElementById('room-id');
   
   const btnTeamRed = document.getElementById('btn-team-red');
   const btnTeamBlue = document.getElementById('btn-team-blue');
@@ -185,7 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Initialize game
       const gameCanvas = document.getElementById('game-canvas');
-      gameInstance = new Game(gameCanvas, avatarDataUrl, selectedTeam, customAudioUrl);
+      const roomId = inputRoomId ? inputRoomId.value.trim() : '';
+      gameInstance = new Game(gameCanvas, avatarDataUrl, selectedTeam, customAudioUrl, roomId);
       gameInstance.start();
 
       if (isTouchDevice) {
