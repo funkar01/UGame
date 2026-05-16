@@ -174,16 +174,92 @@ export class AvatarBuilder {
       if (segmentationResult.length > 0) {
         const maskData = await segmentationResult[0].mask.toImageData();
         const maskArray = maskData.data;
+        
+        let bodyMinX = procWidth, bodyMaxX = 0, bodyMinY = procHeight, bodyMaxY = 0;
 
+        // Pass 1: Find the full bounding box of the person
         for (let y = 0; y < procHeight; y++) {
           for (let x = 0; x < procWidth; x++) {
             const index = (y * procWidth + x) * 4;
-            // maskArray usually stores confidence or binary in A channel, or R channel
-            // In body-segmentation TFJS, it returns ImageData where alpha channel or R/G/B channel > 0 for foreground.
             const isForeground = maskArray[index + 3] > 128 || maskArray[index] > 128;
+            if (isForeground) {
+              if (x < bodyMinX) bodyMinX = x;
+              if (y < bodyMinY) bodyMinY = y;
+              if (x > bodyMaxX) bodyMaxX = x;
+              if (y > bodyMaxY) bodyMaxY = y;
+            }
+          }
+        }
+
+        // Pass 2: Dynamically find the head width by scanning downwards
+        let maxHeadWidth = 10;
+        for (let y = bodyMinY; y <= bodyMaxY; y++) {
+          // Stop scanning once we've gone down far enough to capture the cheekbones (1.15x current max width)
+          if (y > bodyMinY + maxHeadWidth * 1.15) {
+            break;
+          }
+          
+          let rowMinX = procWidth, rowMaxX = 0;
+          for (let x = bodyMinX; x <= bodyMaxX; x++) {
+            const index = (y * procWidth + x) * 4;
+            const isForeground = maskArray[index + 3] > 128 || maskArray[index] > 128;
+            if (isForeground) {
+              if (x < rowMinX) rowMinX = x;
+              if (x > rowMaxX) rowMaxX = x;
+            }
+          }
+          
+          if (rowMinX <= rowMaxX) {
+            const rowWidth = rowMaxX - rowMinX;
+            if (rowWidth > maxHeadWidth) {
+              maxHeadWidth = rowWidth;
+            }
+          }
+        }
+
+        // 1.45 is the optimal ratio to ensure the chin is included but neck is chopped
+        const chinCutoffY = bodyMinY + maxHeadWidth * 1.45;
+
+        // Pass 3: Apply the mask, crop out the body, and laterally erode to remove background halo borders
+        for (let y = 0; y < procHeight; y++) {
+          let rowFirstX = -1;
+          let rowLastX = -1;
+          // First, find the horizontal bounds of the foreground on this specific row
+          for (let x = 0; x < procWidth; x++) {
+            const index = (y * procWidth + x) * 4;
+            const isForeground = maskArray[index + 3] > 128 || maskArray[index] > 128;
+            if (isForeground && y <= chinCutoffY) {
+              if (rowFirstX === -1) rowFirstX = x;
+              rowLastX = x;
+            }
+          }
+          
+          // Calculate how many pixels to shave off the left and right to remove the background "border"
+          let trimAmount = 0;
+          if (rowFirstX !== -1) {
+            trimAmount = Math.max(1, Math.floor((rowLastX - rowFirstX) * 0.05));
+          }
+
+          for (let x = 0; x < procWidth; x++) {
+            const index = (y * procWidth + x) * 4;
+            let isForeground = maskArray[index + 3] > 128 || maskArray[index] > 128;
+
+            if (y > chinCutoffY) {
+              isForeground = false; // Chop off the neck and shoulders
+            }
+
+            // Erode edges to remove background bleeding
+            if (isForeground && rowFirstX !== -1) {
+              if (x < rowFirstX + trimAmount || x > rowLastX - trimAmount) {
+                isForeground = false;
+              }
+            }
 
             if (!isForeground) {
-              data[index + 3] = 0; // Transparent background
+              data[index] = 0;     // Red
+              data[index + 1] = 0; // Green
+              data[index + 2] = 0; // Blue
+              data[index + 3] = 0; // Transparent alpha
             } else {
               foundPixels = true;
               if (x < minX) minX = x;
@@ -204,11 +280,7 @@ export class AvatarBuilder {
         maxY = minY + size;
       } else {
         procCtx.putImageData(imageData, 0, 0);
-        const padding = Math.max(maxX - minX, maxY - minY) * 0.05;
-        minX = Math.max(0, minX - padding);
-        minY = Math.max(0, minY - padding);
-        maxX = Math.min(procWidth, maxX + padding);
-        maxY = Math.min(procHeight, maxY + padding);
+        // Removed the extra padding so we get a tight extraction with no border artifacts.
       }
     }
 
