@@ -53,7 +53,10 @@ export class Game {
   }
 
   initNetwork() {
-    const serverUrl = window.location.hostname ? `http://${window.location.hostname}:3000` : 'http://localhost:3000';
+    let serverUrl = 'http://localhost:3000';
+    if (window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      serverUrl = 'https://ugame-2er9.onrender.com';
+    }
     this.socket = io(serverUrl);
 
     this.socket.on('connect', () => {
