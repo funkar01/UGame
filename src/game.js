@@ -4,7 +4,9 @@ import { GameMap } from './gameMap.js';
 import { RemotePlayer } from './remotePlayer.js';
 import { Bullet } from './bullet.js';
 import { audio } from './audio.js';
-import { io } from 'socket.io-client';
+
+// socket.io-client is loaded globally from the CDN in index.html
+const io = window.io;
 
 export class Game {
   constructor(canvas, playerFaceDataUrl, playerTeam, customAudioUrl, roomId = '') {
