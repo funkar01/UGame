@@ -74,9 +74,9 @@ export class Game {
       Object.keys(players).forEach(id => {
         if (id !== this.socket.id) {
           const p = players[id];
-          const pRoomId = p.roomId || 'global';
+          const pRoomId = p.roomId;
           const myRoomId = this.roomId || 'global';
-          if (pRoomId === myRoomId) {
+          if (pRoomId === undefined || pRoomId === myRoomId) {
             this.remotePlayers[id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
             console.log(`Socket: Added remote player ${id} in room ${pRoomId}`);
           } else {
@@ -90,9 +90,9 @@ export class Game {
       console.log('Socket: newPlayer received:', info);
       if (info.id !== this.socket.id) {
         const p = info.playerData;
-        const pRoomId = p.roomId || 'global';
+        const pRoomId = p.roomId;
         const myRoomId = this.roomId || 'global';
-        if (pRoomId === myRoomId) {
+        if (pRoomId === undefined || pRoomId === myRoomId) {
           this.remotePlayers[info.id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
           console.log(`Socket: Added new remote player ${info.id} in room ${pRoomId}`);
         } else {
