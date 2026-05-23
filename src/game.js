@@ -41,7 +41,12 @@ export class Game {
     this.particles = [];
     this.screenShake = 0;
 
-    if (customAudioUrl) {
+    this.customAudio = customAudioUrl;
+    this.player.customAudioBuffer = null;
+    if (this.customAudio) {
+      audio.decodeAudio(this.customAudio).then(buffer => {
+        this.player.customAudioBuffer = buffer;
+      });
       audio.loadCustomHit(customAudioUrl);
     }
   }
@@ -53,7 +58,8 @@ export class Game {
         y: this.player.y,
         faceDataUrl: this.avatarDataUrl + '__' + (this.roomId || 'global'),
         team: this.player.team,
-        roomId: this.roomId || 'global'
+        roomId: this.roomId || 'global',
+        customAudio: this.customAudio
       });
     }
   }
@@ -85,7 +91,14 @@ export class Game {
           const pRoomId = faceParts[1] || p.roomId || 'global';
           const myRoomId = this.roomId || 'global';
           if (pRoomId === myRoomId) {
-            this.remotePlayers[id] = new RemotePlayer(p.x, p.y, cleanFaceUrl, p.team, p.health, p.isAlive);
+            const rp = new RemotePlayer(p.x, p.y, cleanFaceUrl, p.team, p.health, p.isAlive);
+            this.remotePlayers[id] = rp;
+            rp.customAudioBuffer = null;
+            if (p.customAudio) {
+              audio.decodeAudio(p.customAudio).then(buffer => {
+                rp.customAudioBuffer = buffer;
+              });
+            }
             console.log(`Socket: Added remote player ${id} in room ${pRoomId}`);
           } else {
             console.log(`Socket: Ignored player ${id} from different room: ${pRoomId}`);
@@ -103,7 +116,14 @@ export class Game {
         const pRoomId = faceParts[1] || p.roomId || 'global';
         const myRoomId = this.roomId || 'global';
         if (pRoomId === myRoomId) {
-          this.remotePlayers[info.id] = new RemotePlayer(p.x, p.y, cleanFaceUrl, p.team, p.health, p.isAlive);
+          const rp = new RemotePlayer(p.x, p.y, cleanFaceUrl, p.team, p.health, p.isAlive);
+          this.remotePlayers[info.id] = rp;
+          rp.customAudioBuffer = null;
+          if (p.customAudio) {
+            audio.decodeAudio(p.customAudio).then(buffer => {
+              rp.customAudioBuffer = buffer;
+            });
+          }
           console.log(`Socket: Added new remote player ${info.id} in room ${pRoomId}`);
         } else {
           console.log(`Socket: Ignored new player ${info.id} from different room: ${pRoomId}`);
@@ -127,12 +147,12 @@ export class Game {
 
     this.socket.on('playerHealthUpdate', (data) => {
       if (data.id === this.socket.id) {
-        audio.playCustomHit();
+        audio.playAudioBuffer(this.player.customAudioBuffer);
         this.player.health = data.health;
         this.screenShake = 10;
         this.spawnParticles(this.player.x + 16, this.player.y + 24, '#ef4444');
       } else if (this.remotePlayers[data.id]) {
-        audio.playHit();
+        audio.playAudioBuffer(this.remotePlayers[data.id].customAudioBuffer);
         this.remotePlayers[data.id].health = data.health;
         this.spawnParticles(this.remotePlayers[data.id].x + 16, this.remotePlayers[data.id].y + 24, '#ef4444');
       }
@@ -141,13 +161,13 @@ export class Game {
     this.socket.on('playerDied', (id) => {
       let diedTeam = null;
       if (id === this.socket.id) {
-        audio.playCustomHit();
+        audio.playAudioBuffer(this.player.customAudioBuffer);
         this.player.isAlive = false;
         diedTeam = this.player.team;
         this.screenShake = 20;
         this.spawnParticles(this.player.x + 16, this.player.y + 24, '#ef4444', 20);
       } else if (this.remotePlayers[id]) {
-        audio.playHit();
+        audio.playAudioBuffer(this.remotePlayers[id].customAudioBuffer);
         this.remotePlayers[id].isAlive = false;
         diedTeam = this.remotePlayers[id].team;
         this.spawnParticles(this.remotePlayers[id].x + 16, this.remotePlayers[id].y + 24, '#ef4444', 20);
