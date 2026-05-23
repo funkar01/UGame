@@ -74,8 +74,14 @@ export class Game {
       Object.keys(players).forEach(id => {
         if (id !== this.socket.id) {
           const p = players[id];
-          this.remotePlayers[id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
-          console.log(`Socket: Added remote player ${id} at (${p.x}, ${p.y})`);
+          const pRoomId = p.roomId || 'global';
+          const myRoomId = this.roomId || 'global';
+          if (pRoomId === myRoomId) {
+            this.remotePlayers[id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
+            console.log(`Socket: Added remote player ${id} in room ${pRoomId}`);
+          } else {
+            console.log(`Socket: Ignored player ${id} from different room: ${pRoomId}`);
+          }
         }
       });
     });
@@ -84,23 +90,29 @@ export class Game {
       console.log('Socket: newPlayer received:', info);
       if (info.id !== this.socket.id) {
         const p = info.playerData;
-        this.remotePlayers[info.id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
-        console.log(`Socket: Added new remote player ${info.id} at (${p.x}, ${p.y})`);
+        const pRoomId = p.roomId || 'global';
+        const myRoomId = this.roomId || 'global';
+        if (pRoomId === myRoomId) {
+          this.remotePlayers[info.id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
+          console.log(`Socket: Added new remote player ${info.id} in room ${pRoomId}`);
+        } else {
+          console.log(`Socket: Ignored new player ${info.id} from different room: ${pRoomId}`);
+        }
       }
     });
 
     this.socket.on('playerMoved', (data) => {
       if (this.remotePlayers[data.id]) {
         this.remotePlayers[data.id].updateData(data);
-      } else {
-        console.warn(`Socket: playerMoved received for unknown player ${data.id}`);
       }
     });
 
     this.socket.on('playerShot', (data) => {
-      console.log('Socket: playerShot received:', data);
-      this.bullets.push(new Bullet(data.x, data.y, data.dirX, data.id));
-      audio.playShoot();
+      if (data.id === this.socket.id || this.remotePlayers[data.id]) {
+        console.log('Socket: playerShot received:', data);
+        this.bullets.push(new Bullet(data.x, data.y, data.dirX, data.id));
+        audio.playShoot();
+      }
     });
 
     this.socket.on('playerHealthUpdate', (data) => {
