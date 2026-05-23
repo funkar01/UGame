@@ -404,9 +404,9 @@ export class Game {
     this.player.draw(this.ctx);
     this.ctx.restore();
 
-    // Draw Scores HUD
-    this.ctx.font = '24px Outfit, sans-serif';
-    this.ctx.fontWeight = 'bold';
+    // Update Scores HUD in HTML
+    const redHud = document.getElementById('hud-score-red');
+    const blueHud = document.getElementById('hud-score-blue');
 
     let redCount = (this.player.team === 'red' && this.player.isAlive) ? 1 : 0;
     let blueCount = (this.player.team === 'blue' && this.player.isAlive) ? 1 : 0;
@@ -418,15 +418,8 @@ export class Game {
       }
     });
 
-    // Red Score & Count
-    this.ctx.fillStyle = '#ef4444';
-    this.ctx.textAlign = 'left';
-    this.ctx.fillText(`Red Players: ${redCount}`, 20, 40);
-
-    // Blue Score & Count
-    this.ctx.fillStyle = '#3b82f6';
-    this.ctx.textAlign = 'right';
-    this.ctx.fillText(`Blue Players: ${blueCount}`, this.canvas.width - 20, 40);
+    if (redHud) redHud.innerText = `Red Players: ${redCount}`;
+    if (blueHud) blueHud.innerText = `Blue Players: ${blueCount}`;
 
     if (!this.player.isAlive && !this.isGameOver) {
       this.ctx.fillStyle = 'rgba(0,0,0,0.5)';

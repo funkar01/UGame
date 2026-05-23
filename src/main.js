@@ -2,6 +2,41 @@ import { AvatarBuilder } from './avatarBuilder.js';
 import { Game } from './game.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Request permissions at startup
+  const requestPermissionsFirst = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+        return;
+      }
+      
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const hasVideo = devices.some(device => device.kind === 'videoinput');
+      const hasAudio = devices.some(device => device.kind === 'audioinput');
+
+      if (hasVideo) {
+        try {
+          const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          videoStream.getTracks().forEach(track => track.stop());
+        } catch (e) {
+          console.warn("Camera permission rejected or unavailable on startup:", e);
+        }
+      }
+
+      if (hasAudio) {
+        try {
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioStream.getTracks().forEach(track => track.stop());
+        } catch (e) {
+          console.warn("Audio permission rejected or unavailable on startup:", e);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed checking or requesting permissions at startup:", err);
+    }
+  };
+
+  requestPermissionsFirst();
+
   const actionButtons = document.getElementById('action-buttons');
   const cameraContainer = document.getElementById('camera-container');
   const previewSection = document.getElementById('preview-section');
