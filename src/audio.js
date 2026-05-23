@@ -2,6 +2,35 @@ export class AudioSystem {
   constructor() {
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     this.customHitBuffer = null;
+    
+    // Resume context on first user interaction
+    const resume = () => {
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
+      window.removeEventListener('click', resume);
+      window.removeEventListener('touchstart', resume);
+    };
+    window.addEventListener('click', resume);
+    window.addEventListener('touchstart', resume);
+  }
+
+  playCustomHitUrl(url) {
+    if (!url) {
+      this.playFunnyHit();
+      return;
+    }
+    try {
+      const a = new Audio(url);
+      a.volume = 0.3;
+      a.play().catch(e => {
+        console.error("HTMLAudioElement play failed, trying AudioContext fallback:", e);
+        this.playFunnyHit();
+      });
+    } catch(e) {
+      console.error("HTMLAudioElement creation failed, trying AudioContext fallback:", e);
+      this.playFunnyHit();
+    }
   }
 
   async decodeAudio(urlOrBase64) {

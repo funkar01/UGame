@@ -140,7 +140,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.data.size > 0) audioChunks.push(e.data);
       };
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const mimeType = (mediaRecorder && mediaRecorder.mimeType) ? mediaRecorder.mimeType : 'audio/webm';
+        const audioBlob = new Blob(audioChunks, { type: mimeType });
         customAudioUrl = URL.createObjectURL(audioBlob);
         
         const reader = new FileReader();
