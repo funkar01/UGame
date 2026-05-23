@@ -12,8 +12,12 @@
     "vite": "^8.0.10"
   },
   "dependencies": {
+    "@tensorflow-models/body-pix": "^2.2.1",
+    "@tensorflow-models/body-segmentation": "^1.0.2",
+    "@tensorflow/tfjs": "^4.22.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "puppeteer": "^25.0.2",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3"
   }
