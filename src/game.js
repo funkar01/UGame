@@ -70,32 +70,35 @@ export class Game {
     });
 
     this.socket.on('currentPlayers', (players) => {
+      console.log('Socket: currentPlayers received:', players);
       Object.keys(players).forEach(id => {
         if (id !== this.socket.id) {
           const p = players[id];
-          if (!this.roomId || p.roomId === this.roomId) {
-            this.remotePlayers[id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
-          }
+          this.remotePlayers[id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
+          console.log(`Socket: Added remote player ${id} at (${p.x}, ${p.y})`);
         }
       });
     });
 
     this.socket.on('newPlayer', (info) => {
+      console.log('Socket: newPlayer received:', info);
       if (info.id !== this.socket.id) {
         const p = info.playerData;
-        if (!this.roomId || p.roomId === this.roomId) {
-          this.remotePlayers[info.id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
-        }
+        this.remotePlayers[info.id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
+        console.log(`Socket: Added new remote player ${info.id} at (${p.x}, ${p.y})`);
       }
     });
 
     this.socket.on('playerMoved', (data) => {
       if (this.remotePlayers[data.id]) {
         this.remotePlayers[data.id].updateData(data);
+      } else {
+        console.warn(`Socket: playerMoved received for unknown player ${data.id}`);
       }
     });
 
     this.socket.on('playerShot', (data) => {
+      console.log('Socket: playerShot received:', data);
       this.bullets.push(new Bullet(data.x, data.y, data.dirX, data.id));
       audio.playShoot();
     });
