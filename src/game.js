@@ -46,6 +46,18 @@ export class Game {
     }
   }
 
+  emitJoin() {
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('join', {
+        x: this.player.x,
+        y: this.player.y,
+        faceDataUrl: this.avatarDataUrl + '__' + (this.roomId || 'global'),
+        team: this.player.team,
+        roomId: this.roomId || 'global'
+      });
+    }
+  }
+
   start() {
     this.isRunning = true;
     this.initNetwork();
@@ -60,13 +72,7 @@ export class Game {
     this.socket = io(serverUrl);
 
     this.socket.on('connect', () => {
-      this.socket.emit('join', {
-        x: this.player.x,
-        y: this.player.y,
-        faceDataUrl: this.avatarDataUrl,
-        team: this.player.team,
-        roomId: this.roomId
-      });
+      this.emitJoin();
     });
 
     this.socket.on('currentPlayers', (players) => {
@@ -74,10 +80,12 @@ export class Game {
       Object.keys(players).forEach(id => {
         if (id !== this.socket.id) {
           const p = players[id];
-          const pRoomId = p.roomId;
+          const faceParts = p.faceDataUrl.split('__');
+          const cleanFaceUrl = faceParts[0];
+          const pRoomId = faceParts[1] || p.roomId || 'global';
           const myRoomId = this.roomId || 'global';
-          if (pRoomId === undefined || pRoomId === myRoomId) {
-            this.remotePlayers[id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
+          if (pRoomId === myRoomId) {
+            this.remotePlayers[id] = new RemotePlayer(p.x, p.y, cleanFaceUrl, p.team, p.health, p.isAlive);
             console.log(`Socket: Added remote player ${id} in room ${pRoomId}`);
           } else {
             console.log(`Socket: Ignored player ${id} from different room: ${pRoomId}`);
@@ -90,10 +98,12 @@ export class Game {
       console.log('Socket: newPlayer received:', info);
       if (info.id !== this.socket.id) {
         const p = info.playerData;
-        const pRoomId = p.roomId;
+        const faceParts = p.faceDataUrl.split('__');
+        const cleanFaceUrl = faceParts[0];
+        const pRoomId = faceParts[1] || p.roomId || 'global';
         const myRoomId = this.roomId || 'global';
-        if (pRoomId === undefined || pRoomId === myRoomId) {
-          this.remotePlayers[info.id] = new RemotePlayer(p.x, p.y, p.faceDataUrl, p.team, p.health, p.isAlive);
+        if (pRoomId === myRoomId) {
+          this.remotePlayers[info.id] = new RemotePlayer(p.x, p.y, cleanFaceUrl, p.team, p.health, p.isAlive);
           console.log(`Socket: Added new remote player ${info.id} in room ${pRoomId}`);
         } else {
           console.log(`Socket: Ignored new player ${info.id} from different room: ${pRoomId}`);
@@ -234,15 +244,7 @@ export class Game {
     this.isGameOver = false;
     
     // Notify server we are respawning
-    if (this.socket && this.socket.connected) {
-      this.socket.emit('join', {
-        x: this.player.x,
-        y: this.player.y,
-        faceDataUrl: this.avatarDataUrl,
-        team: this.player.team,
-        roomId: this.roomId
-      });
-    }
+    this.emitJoin();
 
     document.getElementById('game-over-overlay').classList.add('hidden');
     audio.stopBGM();
@@ -311,16 +313,8 @@ export class Game {
           this.player.x = 80 + Math.floor(Math.random() * 60);
           this.player.y = 100;
           this.player.velocityY = 0;
-          if (this.socket) {
-             // Let the server know we're back alive so others see us
-             this.socket.emit('join', {
-               x: this.player.x,
-               y: this.player.y,
-               faceDataUrl: this.avatarDataUrl,
-               team: this.player.team,
-               roomId: this.roomId
-             });
-          }
+          // Let the server know we're back alive so others see us
+          this.emitJoin();
         }
       }, 3000);
     }
