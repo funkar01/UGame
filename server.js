@@ -24,7 +24,8 @@ io.on('connection', (socket) => {
       team: data.team,
       roomId: data.roomId || 'global',
       health: 100,
-      isAlive: true
+      isAlive: true,
+      customAudio: data.customAudio
     };
     
     const room = data.roomId || 'global';

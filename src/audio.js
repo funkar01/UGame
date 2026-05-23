@@ -4,6 +4,30 @@ export class AudioSystem {
     this.customHitBuffer = null;
   }
 
+  async decodeAudio(urlOrBase64) {
+    if (!urlOrBase64) return null;
+    try {
+      const response = await fetch(urlOrBase64);
+      const arrayBuffer = await response.arrayBuffer();
+      return await this.ctx.decodeAudioData(arrayBuffer);
+    } catch(e) {
+      console.error("Failed to decode audio data", e);
+      return null;
+    }
+  }
+
+  playAudioBuffer(buffer) {
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    if (buffer) {
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.ctx.destination);
+      source.start();
+    } else {
+      this.playFunnyHit(); // Fallback
+    }
+  }
+
   async loadCustomHit(url) {
     if (!url) return;
     try {

@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let mediaRecorder;
   let audioChunks = [];
   let customAudioUrl = null;
+  let customAudioBase64 = null;
 
   btnNext.addEventListener('click', () => {
     previewSection.classList.add('hidden');
@@ -141,6 +142,13 @@ document.addEventListener('DOMContentLoaded', () => {
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         customAudioUrl = URL.createObjectURL(audioBlob);
+        
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          customAudioBase64 = reader.result;
+        };
+        reader.readAsDataURL(audioBlob);
+
         audioPreview.src = customAudioUrl;
         audioPreview.classList.remove('hidden');
         btnRecordAudio.innerText = "🎤 Re-record";
@@ -176,6 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnAudioSkip.addEventListener('click', () => {
     customAudioUrl = null;
+    customAudioBase64 = null;
     audioSection.classList.add('hidden');
     modeSection.classList.remove('hidden');
   });
@@ -222,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Initialize game
       const gameCanvas = document.getElementById('game-canvas');
       const roomId = inputRoomId ? inputRoomId.value.trim() : '';
-      gameInstance = new Game(gameCanvas, avatarDataUrl, selectedTeam, customAudioUrl, roomId);
+      gameInstance = new Game(gameCanvas, avatarDataUrl, selectedTeam, customAudioBase64, roomId);
       gameInstance.start();
 
       if (isTouchDevice) {
@@ -263,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
       audioSection.classList.add('hidden');
       modeSection.classList.add('hidden');
       customAudioUrl = null;
+      customAudioBase64 = null;
       fileUpload.value = '';
       if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
       
