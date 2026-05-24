@@ -36,8 +36,21 @@ export class AudioSystem {
   async decodeAudio(urlOrBase64) {
     if (!urlOrBase64) return null;
     try {
-      const response = await fetch(urlOrBase64);
-      const arrayBuffer = await response.arrayBuffer();
+      let arrayBuffer;
+      if (urlOrBase64.startsWith('data:')) {
+        const base64Parts = urlOrBase64.split(',');
+        const base64Data = base64Parts[1];
+        const binaryString = window.atob(base64Data);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        arrayBuffer = bytes.buffer;
+      } else {
+        const response = await fetch(urlOrBase64);
+        arrayBuffer = await response.arrayBuffer();
+      }
       return await this.ctx.decodeAudioData(arrayBuffer);
     } catch(e) {
       console.error("Failed to decode audio data", e);
