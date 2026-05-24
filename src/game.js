@@ -65,14 +65,22 @@ export class Game {
 
   initNetwork() {
     let serverUrl = 'http://localhost:3000';
-    if (window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      if (window.location.hostname.endsWith('onrender.com')) {
-        serverUrl = 'https://ugame-2er9.onrender.com';
-      } else {
+    if (window.location.hostname) {
+      const isLocal = window.location.hostname === 'localhost' || 
+                      window.location.hostname === '127.0.0.1' || 
+                      window.location.hostname.endsWith('.local') || 
+                      !window.location.hostname.includes('.') || 
+                      /^(192\.168|10|172\.(1[6-9]|2[0-9]|3[0-1])|169\.254)\./.test(window.location.hostname);
+      
+      if (isLocal) {
         serverUrl = `http://${window.location.hostname}:3000`;
+      } else {
+        serverUrl = 'https://ugame-2er9.onrender.com';
       }
     }
-    this.socket = io(serverUrl);
+    this.socket = io(serverUrl, {
+      transports: ['websocket']
+    });
 
     this.socket.on('connect', () => {
       this.emitJoin();
