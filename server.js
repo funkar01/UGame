@@ -92,6 +92,20 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('expressEmotion', (data) => {
+    console.log(`[Emote Server] Received expressEmotion from socket ${socket.id}: ${data ? data.emoji : 'undefined'}`);
+    if (players[socket.id]) {
+      const room = players[socket.id].roomId;
+      console.log(`[Emote Server] Broadcasting playerExpressedEmotion to room: ${room}`);
+      socket.to(room).emit('playerExpressedEmotion', {
+        id: socket.id,
+        emoji: data.emoji
+      });
+    } else {
+      console.log(`[Emote Server] Warning: socket ${socket.id} not found in players registry!`);
+    }
+  });
+
   socket.on('disconnect', () => {
     if (players[socket.id]) {
       const room = players[socket.id].roomId;

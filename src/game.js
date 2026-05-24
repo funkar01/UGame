@@ -240,6 +240,17 @@ export class Game {
       }
     });
 
+    this.socket.on('playerExpressedEmotion', (data) => {
+      console.log(`[Emote Network] Received remote emote broadcast:`, data);
+      if (this.remotePlayers[data.id]) {
+        this.remotePlayers[data.id].activeEmoji = data.emoji;
+        this.remotePlayers[data.id].emojiTimer = 2.5;
+        this.remotePlayers[data.id].emojiTimeAccumulator = 0;
+      } else {
+        console.warn(`[Emote Network] Remote player ID ${data.id} not found in this client's remotePlayers map. Available IDs:`, Object.keys(this.remotePlayers));
+      }
+    });
+
     this.socket.on('gameOver', (message) => {
       // Handled locally now via triggerGameOver
     });
@@ -310,6 +321,22 @@ export class Game {
       
       card.style.display = 'flex';
       overlay.classList.remove('hidden');
+    }
+  }
+
+  expressLocalEmotion(emoji) {
+    if (!this.player.isAlive || this.isGameOver) return;
+    
+    console.log(`[Emote Local] Player expressed emoji: ${emoji}`);
+    this.player.activeEmoji = emoji;
+    this.player.emojiTimer = 2.5;
+    this.player.emojiTimeAccumulator = 0;
+
+    if (this.socket && this.socket.connected) {
+      console.log(`[Emote Local] Emitting 'expressEmotion' to server:`, { emoji: emoji });
+      this.socket.emit('expressEmotion', { emoji: emoji });
+    } else {
+      console.warn(`[Emote Local] Socket connection unavailable! Cannot broadcast emote.`);
     }
   }
 

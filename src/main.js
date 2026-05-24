@@ -319,6 +319,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isTouchDevice) {
         document.getElementById('mobile-gamepad').classList.remove('hidden');
       }
+
+      const emojiBar = document.getElementById('emoji-bar');
+      if (emojiBar) emojiBar.classList.remove('hidden');
     }, 500);
   });
 
@@ -340,6 +343,9 @@ document.addEventListener('DOMContentLoaded', () => {
       gameContainer.classList.add('hidden');
       startScreen.classList.remove('hidden');
       startScreen.classList.remove('fade-out');
+      
+      const emojiBar = document.getElementById('emoji-bar');
+      if (emojiBar) emojiBar.classList.add('hidden');
       
       // Reset team selection
       selectedTeam = null;
@@ -367,4 +373,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // Emoji button click listeners
+  const emojiButtons = document.querySelectorAll('.emoji-btn');
+  emojiButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (gameInstance) {
+        const emoji = btn.getAttribute('data-emoji');
+        gameInstance.expressLocalEmotion(emoji);
+      }
+    });
+  });
 });

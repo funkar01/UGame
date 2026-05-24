@@ -19,6 +19,10 @@ export class RemotePlayer {
     
     this.dancing = false;
     this.danceTime = 0;
+
+    this.activeEmoji = null;
+    this.emojiTimer = 0;
+    this.emojiTimeAccumulator = 0;
   }
 
   updateData(data) {
@@ -34,6 +38,15 @@ export class RemotePlayer {
 
   update(dt) {
     if (!this.isAlive) return;
+    
+    if (this.emojiTimer > 0) {
+      this.emojiTimer -= dt;
+      this.emojiTimeAccumulator += dt;
+      if (this.emojiTimer <= 0) {
+        this.activeEmoji = null;
+      }
+    }
+
     if (this.dancing) {
       this.danceTime += dt;
     }
@@ -116,5 +129,32 @@ export class RemotePlayer {
     ctx.font = '10px "Outfit", sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(this.team === 'red' ? 'TEAM RED' : 'TEAM BLUE', this.x + this.width / 2, drawY - 15);
+
+    // Draw Emoji Speech Bubble
+    if (this.activeEmoji && this.emojiTimer > 0) {
+      ctx.save();
+      // Calculate float offset with sine wave for floaty effect
+      const floatOffset = Math.sin(this.emojiTimeAccumulator * 5) * 3 - 35; // float above team label
+      
+      // Calculate elastic bounce scale on spring-in and fade/scale on out
+      let scale = 1;
+      const duration = 2.5; // total duration
+      const elapsed = duration - this.emojiTimer;
+      if (elapsed < 0.3) {
+        scale = elapsed / 0.3;
+      } else if (this.emojiTimer < 0.3) {
+        scale = this.emojiTimer / 0.3;
+      }
+      
+      ctx.translate(this.x + this.width / 2, drawY + floatOffset);
+      ctx.scale(scale, scale);
+      
+      // Draw Emoji DIRECTLY
+      ctx.font = '24px Arial'; // Slightly larger for better readability without bubble outline
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(this.activeEmoji, 0, 0);
+      ctx.restore();
+    }
   }
 }
