@@ -1,5 +1,3 @@
-import { ImageSegmenter, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs";
-
 export class AvatarBuilder {
   constructor(videoElement, previewCanvas) {
     this.video = videoElement;
@@ -17,42 +15,79 @@ export class AvatarBuilder {
 
   async initModel() {
     try {
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+      // First try WebGL, fallback to CPU
+      try {
+        await tf.setBackend('webgl');
+      } catch(e) {
+        console.warn('WebGL failed, falling back to CPU for TFJS', e);
+        await tf.setBackend('cpu');
+      }
+
+      const segmenterConfig = {
+        runtime: 'tfjs',
+        modelType: 'general'
+      };
+      this.segmenter = await bodySegmentation.createSegmenter(
+        bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation,
+        segmenterConfig
       );
 
-      this.segmenter = await ImageSegmenter.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite",
-          delegate: "GPU"
-        },
-        runningMode: "IMAGE",
-        outputCategoryMask: true,
-        outputConfidenceMasks: false
-      });
-      
+      const detectorConfig = { runtime: 'tfjs' };
+      this.faceDetector = await faceDetection.createDetector(
+        faceDetection.SupportedModels.MediaPipeFaceDetector,
+        detectorConfig
+      );
       this.isModelLoading = false;
       document.getElementById('loading-overlay').classList.add('hidden');
     } catch (e) {
       console.error("Failed to load segmenter model", e);
-      document.getElementById('loading-text').innerText = "Failed to load AI.";
+      document.getElementById('loading-text').innerText = "Failed to load AI. Using fallback.";
+      setTimeout(() => {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) overlay.classList.add('hidden');
+      }, 1500);
+      this.isModelLoading = false;
     }
   }
 
   async startCamera() {
+    if (navigator.mediaDevices === undefined) {
+      navigator.mediaDevices = {};
+    }
+    if (navigator.mediaDevices.getUserMedia === undefined) {
+      navigator.mediaDevices.getUserMedia = function(constraints) {
+        var getUserMedia = navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
+        if (!getUserMedia) {
+          return Promise.reject(new Error('getUserMedia is not implemented in this browser'));
+        }
+        return new Promise(function(resolve, reject) {
+          getUserMedia.call(navigator, constraints, resolve, reject);
+        });
+      }
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      } catch (err) {
+        console.warn("Fallback to generic video", err);
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+      
       this.video.srcObject = stream;
       
       return new Promise((resolve) => {
         this.video.onloadedmetadata = () => {
-          this.video.play();
-          resolve(true);
+          this.video.play().then(() => resolve(true)).catch(e => {
+            console.error("Video play failed:", e);
+            resolve(true);
+          });
         };
       });
     } catch (err) {
       console.error("Error accessing camera: ", err);
-      alert("Could not access camera. Please upload a photo instead.");
+      alert(`Could not access camera: ${err.message || err.name}. Please upload a photo instead.`);
       return false;
     }
   }
@@ -84,108 +119,152 @@ export class AvatarBuilder {
   }
 
   async processImageWithSegmenter(source) {
-    if (this.isModelLoading || !this.segmenter) {
+    if (this.isModelLoading) {
       alert("AI model is still loading, please wait a moment.");
       return null;
     }
 
     // Determine the size for segmentation
-    let sWidth, sHeight;
+    let oWidth, oHeight;
     if (source instanceof HTMLVideoElement) {
-      sWidth = source.videoWidth;
-      sHeight = source.videoHeight;
+      oWidth = source.videoWidth;
+      oHeight = source.videoHeight;
     } else {
-      sWidth = source.width;
-      sHeight = source.height;
+      oWidth = source.naturalWidth || source.width;
+      oHeight = source.naturalHeight || source.height;
     }
 
-    // Center crop coordinates to make it square first
-    const size = Math.min(sWidth, sHeight);
-    const sx = (sWidth - size) / 2;
-    const sy = (sHeight - size) / 2;
+    const MAX_DIM = 512;
+    let scale = 1;
+    if (oWidth > MAX_DIM || oHeight > MAX_DIM) {
+      scale = MAX_DIM / Math.max(oWidth, oHeight);
+    }
+    const procWidth = Math.floor(oWidth * scale);
+    const procHeight = Math.floor(oHeight * scale);
 
-    // Create a temporary canvas for the cropped source image
-    const cropCanvas = document.createElement('canvas');
-    cropCanvas.width = size;
-    cropCanvas.height = size;
-    const cropCtx = cropCanvas.getContext('2d');
+    const procCanvas = document.createElement('canvas');
+    procCanvas.width = procWidth;
+    procCanvas.height = procHeight;
+    const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
     
-    // Draw the square cropped center
-    cropCtx.drawImage(source, sx, sy, size, size, 0, 0, size, size);
+    if (source instanceof HTMLVideoElement) {
+      procCtx.translate(procWidth, 0);
+      procCtx.scale(-1, 1);
+    }
+    procCtx.drawImage(source, 0, 0, procWidth, procHeight);
+    procCtx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // Segment the image
-    const segmentationResult = this.segmenter.segment(cropCanvas);
-    const mask = segmentationResult.categoryMask; 
-    
-    // We need to scale the mask back to the cropCanvas size to apply it correctly.
-    // The categoryMask is a Uint8Array of shape [mask.width, mask.height].
-    const maskArr = mask.getAsUint8Array();
-    const maskW = mask.width;
-    const maskH = mask.height;
+    let minX = procWidth, minY = procHeight, maxX = 0, maxY = 0;
 
-    const imageData = cropCtx.getImageData(0, 0, size, size);
-    const data = imageData.data;
-    
-    // Categories: 1: hair, 3: face
-    const keepClasses = new Set([1, 3]);
+    if (!this.segmenter || !this.faceDetector) {
+      console.warn("AI models not available. Using center crop fallback.");
+      const size = Math.min(procWidth, procHeight);
+      minX = (procWidth - size) / 2;
+      minY = (procHeight - size) / 2;
+      maxX = minX + size;
+      maxY = minY + size;
+    } else {
+      // Run both segmentation and face detection concurrently
+      const segmentationPromise = this.segmenter.segmentPeople(procCanvas, {
+        multiSegmentation: false,
+        segmentBodyParts: false
+      });
+      const facePromise = this.faceDetector.estimateFaces(procCanvas, { flipHorizontal: false });
 
-    let minX = size, minY = size, maxX = 0, maxY = 0;
-    let foundPixels = false;
+      const [segmentationResult, faces] = await Promise.all([segmentationPromise, facePromise]);
 
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        // Map (x, y) from cropCanvas to mask coordinates
-        const mx = Math.floor((x / size) * maskW);
-        const my = Math.floor((y / size) * maskH);
-        const category = maskArr[my * maskW + mx];
+      const imageData = procCtx.getImageData(0, 0, procWidth, procHeight);
+      const data = imageData.data;
+      
+      let foundPixels = false;
 
-        const index = (y * size + x) * 4;
+      if (segmentationResult.length > 0) {
+        const maskData = await segmentationResult[0].mask.toImageData();
+        const maskArray = maskData.data;
 
-        if (!keepClasses.has(category)) {
-          // Make background/body/clothes transparent
-          data[index + 3] = 0; // Alpha channel
+        let faceBox = null;
+        if (faces && faces.length > 0) {
+          faceBox = faces[0].box;
+        }
+
+        let chinCutoffY = procHeight;
+        let cropMinX = 0;
+        let cropMaxX = procWidth;
+        let cropMinY = 0;
+
+        if (faceBox) {
+          // A precise bounding box from the face detector solves the long hair/dress problem.
+          // We expand it slightly to include the top and sides of the hair, but cut strictly at the chin.
+          cropMinY = faceBox.yMin - faceBox.height * 0.7; // Top hair
+          chinCutoffY = faceBox.yMin + faceBox.height * 1.15; // Chin/Jawline
+          
+          cropMinX = faceBox.xMin - faceBox.width * 0.6; // Left hair
+          cropMaxX = faceBox.xMin + faceBox.width * 1.6; // Right hair
         } else {
-          // Keep pixel, track bounding box
-          foundPixels = true;
-          if (x < minX) minX = x;
-          if (y < minY) minY = y;
-          if (x > maxX) maxX = x;
-          if (y > maxY) maxY = y;
+          // Fallback if face detection fails: use old silhouette heuristic
+          let bodyMinY = procHeight;
+          for (let y = 0; y < procHeight; y++) {
+            for (let x = 0; x < procWidth; x++) {
+              if (maskArray[(y * procWidth + x) * 4 + 3] > 128) {
+                if (y < bodyMinY) bodyMinY = y;
+              }
+            }
+          }
+          chinCutoffY = bodyMinY + procWidth * 0.5; // Very rough guess
+        }
+
+        // Apply the mask and precise face bounding box
+        for (let y = 0; y < procHeight; y++) {
+          for (let x = 0; x < procWidth; x++) {
+            const index = (y * procWidth + x) * 4;
+            let isForeground = maskArray[index + 3] > 128 || maskArray[index] > 128;
+
+            // Apply strict face boundary cuts
+            if (y > chinCutoffY || y < cropMinY || x < cropMinX || x > cropMaxX) {
+              isForeground = false;
+            }
+
+            if (!isForeground) {
+              data[index + 3] = 0; // Transparent alpha, leave RGB to avoid dark halo
+            } else {
+              foundPixels = true;
+              if (x < minX) minX = x;
+              if (y < minY) minY = y;
+              if (x > maxX) maxX = x;
+              if (y > maxY) maxY = y;
+            }
+          }
         }
       }
-    }
 
-    if (!foundPixels) {
-      console.warn("No face/hair found in the image.");
-      // Fallback: just use the whole crop
-      minX = 0; minY = 0; maxX = size; maxY = size;
-    } else {
-      // Put the modified transparent image data back
-      cropCtx.putImageData(imageData, 0, 0);
-
-      // Add a small 5% padding around the extracted face/hair
-      const padding = size * 0.05;
-      minX = Math.max(0, minX - padding);
-      minY = Math.max(0, minY - padding);
-      maxX = Math.min(size, maxX + padding);
-      maxY = Math.min(size, maxY + padding);
+      if (!foundPixels) {
+        console.warn("No face/hair found in the image.");
+        const size = Math.min(procWidth, procHeight);
+        minX = (procWidth - size) / 2;
+        minY = (procHeight - size) / 2;
+        maxX = minX + size;
+        maxY = minY + size;
+      } else {
+        procCtx.putImageData(imageData, 0, 0);
+        // Removed the extra padding so we get a tight extraction with no border artifacts.
+      }
     }
 
     const faceWidth = maxX - minX;
     const faceHeight = maxY - minY;
 
-    // We want the final bounding box to be roughly square so it doesn't squish weirdly
-    // Let's force it to be square based on the max dimension
     const maxDim = Math.max(faceWidth, faceHeight);
     const centerX = minX + faceWidth / 2;
     const centerY = minY + faceHeight / 2;
     
-    const finalX = Math.max(0, centerX - maxDim / 2);
-    const finalY = Math.max(0, centerY - maxDim / 2);
-    // Adjust size if it goes out of bounds
-    const finalSize = Math.min(maxDim, size - finalX, size - finalY);
+    let finalX = Math.max(0, centerX - maxDim / 2);
+    let finalY = Math.max(0, centerY - maxDim / 2);
+    let finalSize = maxDim;
 
-    this.pixelateCanvas(cropCanvas, finalX, finalY, finalSize, finalSize);
+    if (finalX + finalSize > procWidth) finalSize = procWidth - finalX;
+    if (finalY + finalSize > procHeight) finalSize = procHeight - finalY;
+
+    this.pixelateCanvas(procCanvas, finalX, finalY, finalSize, finalSize);
     return this.finalImageDataUrl;
   }
 

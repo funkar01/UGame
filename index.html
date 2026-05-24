@@ -2,11 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>UGame: Pixelate Yourself</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/style.css">
+    <script type="module" src="./src/main.js"></script>
+    <link rel="stylesheet" href="./style.css">
+    
+    <!-- Load Socket.io Client -->
+    <script src="https://cdn.socket.io/4.8.3/socket.io.min.js"></script>
+    <!-- Load TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <!-- Load Body Segmentation -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-segmentation@1.0.1/dist/body-segmentation.min.js"></script>
+    <!-- Load Face Detection -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection@1.0.2/dist/face-detection.js"></script>
   </head>
   <body>
     <div id="app">
@@ -34,7 +44,7 @@
         </div>
 
         <div id="camera-container" class="hidden" style="display:flex; flex-direction:column; align-items:center;">
-          <video id="camera-video" autoplay playsinline style="width:100%; max-width:300px; border-radius:12px; margin-bottom:1rem; border:2px solid #334155;"></video>
+          <video id="camera-video" autoplay playsinline style="width:100%; max-width:300px; border-radius:12px; margin-bottom:1rem; border:2px solid #334155; transform: scaleX(-1);"></video>
           <button id="btn-take-photo" class="btn primary" style="width:100%;">📸 Capture</button>
         </div>
 
@@ -45,25 +55,52 @@
           <button id="btn-retake" class="btn secondary" style="margin-top:0.5rem; width:100%;">Retake</button>
         </div>
 
-        <div id="mode-section" class="hidden" style="text-align: left; margin-top: 1rem;">
-          <h2 style="text-align: center; margin-bottom: 1rem; font-size: 2rem;">Game Setup</h2>
+        <div id="audio-section" class="hidden" style="margin-top: 1rem; text-align: center; display: flex; flex-direction: column; align-items: center;">
+          <h3 style="margin-bottom: 0.5rem;">Record Battle Cry</h3>
+          <p id="audio-instruction" style="font-size: 0.9rem; margin-bottom: 1.5rem; color: var(--text-muted);">Tap to record a funny hit sound (max 2s)!</p>
           
-          <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 12px; margin-bottom: 1rem; text-align: center;">
-            <h3 style="color: #60a5fa; margin-bottom: 0.5rem;">Mode: 🔫 ShootU</h3>
-            <p style="font-size: 0.9rem; margin-bottom: 0; color: #cbd5e1;">Team Deathmatch! Shoot enemies to reduce health. Last team standing wins.</p>
+          <div class="recorder-container" style="position: relative; display: inline-flex; justify-content: center; align-items: center; margin-bottom: 1.5rem; width: 90px; height: 90px;">
+            <button id="btn-record-audio" class="btn-record" style="user-select: none; -webkit-user-select: none;">🎤</button>
+            <div id="recorder-pulse" class="recorder-pulse-ring"></div>
           </div>
           
+          <div id="recording-progress-container" class="hidden" style="width: 100%; max-width: 280px; margin-bottom: 1.5rem;">
+            <div class="progress-bar-bg" style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; position: relative;">
+              <div id="recording-progress-fill" style="width: 0%; height: 100%; background: #ef4444; position: absolute; left: 0; top: 0;"></div>
+            </div>
+            <span id="recording-timer" style="display: block; font-size: 0.85rem; color: #ef4444; font-weight: 600; margin-top: 0.5rem;">0.0s / 2.0s</span>
+          </div>
+
+          <audio id="audio-preview" controls class="hidden" style="width: 100%; max-width: 320px; margin-bottom: 1.5rem; border-radius: 8px;"></audio>
+          
+          <div style="width: 100%; display: flex; flex-direction: column; gap: 0.5rem; max-width: 320px;">
+            <button id="btn-audio-next" class="btn action">Continue</button>
+            <button id="btn-audio-skip" class="btn secondary" style="width:100%;">Skip</button>
+          </div>
+        </div>
+
+        <div id="mode-section" class="hidden" style="text-align: left; margin-top: 1rem;">
           <h3 style="text-align: center; margin-bottom: 0.5rem; font-size: 1.2rem;">Select Team</h3>
           <div style="display: flex; gap: 1rem; justify-content: center; margin-bottom: 1.5rem;" id="team-buttons">
             <button id="btn-team-red" class="btn" style="background: #ef4444; color: white; flex: 1; border: 2px solid transparent;">Team Red</button>
             <button id="btn-team-blue" class="btn" style="background: #3b82f6; color: white; flex: 1; border: 2px solid transparent;">Team Blue</button>
           </div>
 
-          <div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 12px; font-size: 0.95rem; line-height: 1.6; border: 1px solid rgba(255,255,255,0.1);">
+          <div class="room-input-container" style="margin-bottom: 1.5rem;">
+            <label for="room-id" style="display: block; font-size: 0.9rem; margin-bottom: 0.5rem; color: #cbd5e1; text-align: center;">Room ID (Optional)</label>
+            <input type="text" id="room-id" placeholder="Enter Room Name" style="width: 100%; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-family: 'Outfit', sans-serif; font-size: 1rem; text-align: center;">
+          </div>
+
+          <div id="pc-instructions" style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 12px; font-size: 0.95rem; line-height: 1.6; border: 1px solid rgba(255,255,255,0.1);">
             <strong style="color: #e2e8f0; display: block; margin-bottom: 0.5rem;">🎮 Controls:</strong>
             • Move: <kbd style="background: #334155; padding: 2px 6px; border-radius: 4px;">A</kbd> / <kbd style="background: #334155; padding: 2px 6px; border-radius: 4px;">D</kbd> or Arrows<br>
             • Jump: <kbd style="background: #334155; padding: 2px 6px; border-radius: 4px;">W</kbd> or <kbd style="background: #334155; padding: 2px 6px; border-radius: 4px;">Space</kbd> (Double tap for Double Jump)<br>
             • Shoot: <kbd style="background: #334155; padding: 2px 6px; border-radius: 4px;">F</kbd>
+          </div>
+
+          <div id="mobile-instructions" class="hidden" style="background: rgba(59,130,246,0.1); padding: 1rem; border-radius: 12px; font-size: 0.95rem; line-height: 1.6; border: 1px solid rgba(59,130,246,0.3); margin-top: 1rem;">
+            <strong style="color: #60a5fa; display: block; margin-bottom: 0.5rem;">📱 Mobile Controls:</strong>
+            Use the on-screen Gamepad to Move, Jump, and Shoot!
           </div>
 
           <button id="btn-start-game" class="btn action hidden" style="margin-top: 1.5rem; width: 100%;">START COMBAT</button>
@@ -71,11 +108,54 @@
       </div>
 
       <!-- Game Container -->
-      <div id="game-container" class="hidden">
+      <div id="game-container" class="hidden" style="position: relative;">
+        <div id="hud-score-red" class="hud-score score-left">Red Players: 0</div>
+        <div id="hud-score-blue" class="hud-score score-right">Blue Players: 0</div>
         <canvas id="game-canvas" width="800" height="600"></canvas>
+        
+        <div id="game-over-overlay" class="hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10; backdrop-filter: blur(8px);">
+          <div id="game-over-card" style="display: none; flex-direction: column; align-items: center; background: rgba(30, 41, 59, 0.7); padding: 2rem; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5); max-width: 400px; width: 90%; text-align: center; transition: all 0.3s ease;">
+            <img id="game-over-image" src="" alt="Game Over" style="width: 100%; max-height: 200px; border-radius: 16px; margin-bottom: 1.5rem; object-fit: cover; border: 2px solid rgba(255,255,255,0.05); box-shadow: 0 10px 20px rgba(0,0,0,0.3);">
+            <h1 id="game-over-text" style="color: white; font-size: 2.5rem; margin-top: 0; margin-bottom: 0.5rem; font-weight: 800; letter-spacing: 1px;"></h1>
+            <p id="game-over-subtitle" style="color: #94a3b8; font-size: 1.1rem; margin-top: 0; margin-bottom: 1.5rem; line-height: 1.4;"></p>
+            <div style="display: flex; gap: 1rem; width: 100%; justify-content: center;">
+              <button id="btn-restart" class="btn primary" style="flex: 1; padding: 1rem; font-size: 1.1rem;">Restart</button>
+              <button id="btn-quit" class="btn secondary" style="flex: 1; padding: 1rem; font-size: 1.1rem;">Quit</button>
+            </div>
+          </div>
+        </div>
+        
+        <div id="mobile-gamepad" class="hidden">
+          <div class="dpad">
+            <button id="btn-left" class="gamepad-btn">
+              <svg viewBox="0 0 24 24" width="40" height="40" fill="white">
+                <path d="M4 12 l8 -8 v5 h8 v6 h-8 v5 z"/>
+              </svg>
+            </button>
+            <button id="btn-right" class="gamepad-btn">
+              <svg viewBox="0 0 24 24" width="40" height="40" fill="white">
+                <path d="M20 12 l-8 -8 v5 h-8 v6 h8 v5 z"/>
+              </svg>
+            </button>
+          </div>
+          <div class="action-pad">
+            <button id="btn-shoot" class="gamepad-btn shoot-btn">
+              <svg viewBox="0 0 24 24" width="40" height="40" fill="white">
+                <!-- Bullet body -->
+                <path d="M22,12 C22,12 17,6 14,6 C11,6 9,8 9,12 C9,16 11,18 14,18 C17,18 22,12 22,12 Z" />
+                <!-- Flames -->
+                <path d="M8,12 L2,8 L4,12 L2,16 Z" />
+              </svg>
+            </button>
+            <button id="btn-jump" class="gamepad-btn jump-btn">
+              <svg viewBox="0 0 24 24" width="40" height="40" fill="white">
+                <path d="M12 4 l-8 8 h5 v8 h6 v-8 h5 z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
       
     </div>
-    <script type="module" src="/src/main.js"></script>
   </body>
 </html>

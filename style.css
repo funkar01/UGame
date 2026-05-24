@@ -198,3 +198,168 @@ p {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* Mobile Gamepad */
+#mobile-gamepad {
+  position: absolute;
+  bottom: 50px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 30px;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.dpad, .action-pad {
+  display: flex;
+  gap: 15px;
+  pointer-events: auto;
+}
+
+.gamepad-btn {
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: 50%;
+  width: 75px;
+  height: 75px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.gamepad-btn:active {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(0.95);
+}
+
+/* Remove the individual colored styling to keep it uniform */
+.shoot-btn {
+}
+.shoot-btn:active {
+}
+
+.jump-btn {
+}
+.jump-btn:active {
+}
+
+/* Scores HUD overlay */
+.hud-score {
+  position: absolute;
+  top: 30px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #000000;
+  z-index: 5;
+  font-family: 'Outfit', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+.score-left {
+  left: 30px;
+}
+
+.score-right {
+  right: 30px;
+}
+
+@media (max-width: 768px) {
+  .hud-score {
+    font-size: 1.1rem;
+    top: 15px;
+  }
+  .score-left {
+    left: 15px;
+  }
+  .score-right {
+    right: 15px;
+  }
+}
+
+/* Custom Recording UX Styles */
+.btn-record {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  background: var(--accent);
+  color: white;
+  font-size: 2rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+  position: relative;
+  z-index: 2;
+  outline: none;
+}
+
+.btn-record:hover {
+  transform: scale(1.05);
+  background: var(--accent-hover);
+  box-shadow: 0 10px 28px rgba(59, 130, 246, 0.5);
+}
+
+.btn-record:active {
+  transform: scale(0.95);
+}
+
+.btn-record.recording {
+  background: #ef4444;
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.5);
+  animation: pulse-border 1.5s infinite;
+}
+
+.recorder-pulse-ring {
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.4);
+  z-index: 1;
+  opacity: 0;
+  transform: scale(1);
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.btn-record.recording + .recorder-pulse-ring,
+.recorder-pulse-ring.active {
+  animation: pulse-ring 1.5s cubic-bezier(0.215, 0.610, 0.355, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes pulse-border {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 15px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+

@@ -1,63 +1,53 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import cors from 'cors';
 
 const app = express();
-app.use(cors());
-
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: "*", methods: ["GET", "POST"] }
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
 });
 
 const players = {};
 
-function checkWinCondition() {
-  const teams = { red: 0, blue: 0 };
-  let totalPlayers = 0;
-  
-  for (let id in players) {
-    totalPlayers++;
-    if (players[id].isAlive) {
-      teams[players[id].team]++;
-    }
-  }
-
-  if (totalPlayers > 1) {
-    if (teams.red === 0 && teams.blue > 0) {
-      io.emit('gameOver', 'Blue Team Wins!');
-    } else if (teams.blue === 0 && teams.red > 0) {
-      io.emit('gameOver', 'Red Team Wins!');
-    }
-  }
-}
-
 io.on('connection', (socket) => {
-  console.log(`Player connected: ${socket.id}`);
-
-  socket.on('join', (data) => {
+  socket.on('join', async (data) => {
+    if (!data || data.x === undefined || data.y === undefined || !data.team) return;
+    
     players[socket.id] = {
       x: data.x,
       y: data.y,
       faceDataUrl: data.faceDataUrl,
       team: data.team,
+      roomId: data.roomId || 'global',
       health: 100,
-      isAlive: true
+      isAlive: true,
+      customAudio: data.customAudio
     };
-
-    socket.emit('currentPlayers', players);
-    socket.broadcast.emit('newPlayer', {
-      id: socket.id,
-      playerData: players[socket.id]
-    });
+    
+    const room = data.roomId || 'global';
+    await socket.join(room);
+    
+    const roomPlayers = {};
+    for (const id in players) {
+      if (players[id].roomId === room) {
+        roomPlayers[id] = players[id];
+      }
+    }
+    socket.emit('currentPlayers', roomPlayers);
+    socket.to(room).emit('newPlayer', { id: socket.id, playerData: players[socket.id] });
   });
 
   socket.on('move', (data) => {
-    if (players[socket.id] && players[socket.id].isAlive) {
+    if (players[socket.id]) {
       players[socket.id].x = data.x;
       players[socket.id].y = data.y;
-      socket.broadcast.emit('playerMoved', {
+      
+      const room = players[socket.id].roomId;
+      socket.to(room).emit('playerMoved', {
         id: socket.id,
         x: data.x,
         y: data.y
@@ -66,25 +56,29 @@ io.on('connection', (socket) => {
   });
 
   socket.on('shoot', (data) => {
-    socket.broadcast.emit('playerShot', {
-      id: socket.id,
-      x: data.x,
-      y: data.y,
-      dirX: data.dirX
-    });
+    if (players[socket.id]) {
+      const room = players[socket.id].roomId;
+      socket.to(room).emit('playerShot', {
+        id: socket.id,
+        x: data.x,
+        y: data.y,
+        dirX: data.dirX
+      });
+    }
   });
 
   socket.on('hitPlayer', (targetId) => {
     if (players[targetId] && players[targetId].isAlive) {
       players[targetId].health -= 10;
+      const room = players[targetId].roomId;
+      
       if (players[targetId].health <= 0) {
         players[targetId].health = 0;
         players[targetId].isAlive = false;
         
-        io.emit('playerDied', targetId);
-        checkWinCondition();
+        io.to(room).emit('playerDied', targetId);
       } else {
-        io.emit('playerHealthUpdate', { id: targetId, health: players[targetId].health });
+        io.to(room).emit('playerHealthUpdate', { id: targetId, health: players[targetId].health });
       }
     }
   });
@@ -93,19 +87,21 @@ io.on('connection', (socket) => {
     if (players[socket.id] && players[socket.id].isAlive) {
       players[socket.id].health = 0;
       players[socket.id].isAlive = false;
-      io.emit('playerDied', socket.id);
-      checkWinCondition();
+      const room = players[socket.id].roomId;
+      io.to(room).emit('playerDied', socket.id);
     }
   });
 
   socket.on('disconnect', () => {
-    delete players[socket.id];
-    io.emit('playerDisconnected', socket.id);
-    checkWinCondition();
+    if (players[socket.id]) {
+      const room = players[socket.id].roomId;
+      delete players[socket.id];
+      socket.to(room).emit('playerDisconnected', socket.id);
+    }
   });
 });
 
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
-  console.log(`Multiplayer server running on port ${PORT}`);
+  console.log(`Local Server running with Room support on port ${PORT}`);
 });

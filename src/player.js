@@ -1,3 +1,5 @@
+import { audio } from './audio.js';
+
 export class Player {
   constructor(x, y, faceDataUrl, team) {
     this.x = x;
@@ -23,10 +25,17 @@ export class Player {
     this.faceImage = new Image();
     this.faceImage.src = faceDataUrl;
     this.headSize = 32;
+    this.dancing = false;
+    this.danceTime = 0;
   }
 
   update(dt, input, gameMap) {
     if (!this.isAlive) return;
+    
+    if (this.dancing) {
+      this.danceTime += dt;
+      return; // Stop normal logic if dancing
+    }
 
     // Horizontal movement
     if (input.keys.left) {
@@ -49,6 +58,7 @@ export class Player {
       this.grounded = false;
       this.jumpCount++;
       input.justPressed.jump = false; // Consume input
+      audio.playJump();
     }
 
     // Apply gravity
@@ -91,7 +101,19 @@ export class Player {
   draw(ctx) {
     if (!this.isAlive) return;
 
-    const bodyY = this.y + this.headSize;
+    let drawY = this.y;
+    let drawFacingRight = this.facingRight;
+    
+    if (this.dancing) {
+      // Bounce effect
+      drawY -= Math.abs(Math.sin(this.danceTime * 10)) * 20;
+      // Flip left/right rapidly
+      if (Math.floor(this.danceTime * 5) % 2 === 0) {
+        drawFacingRight = !drawFacingRight;
+      }
+    }
+
+    const bodyY = drawY + this.headSize;
     const bodyHeight = this.height - this.headSize;
     
     // Shirt (Team Color)
@@ -104,12 +126,14 @@ export class Player {
     
     // Arms
     ctx.fillStyle = '#fca5a5';
-    ctx.fillRect(this.x, bodyY + 2, 4, 10);
-    ctx.fillRect(this.x + this.width - 4, bodyY + 2, 4, 10);
+    let armOffset = 0;
+    if (this.dancing) armOffset = Math.sin(this.danceTime * 15) * 10;
+    ctx.fillRect(this.x, bodyY + 2 - armOffset, 4, 10);
+    ctx.fillRect(this.x + this.width - 4, bodyY + 2 + armOffset, 4, 10);
 
     // Gun
     ctx.fillStyle = '#334155';
-    if (this.facingRight) {
+    if (drawFacingRight) {
       ctx.fillRect(this.x + this.width - 4, bodyY + 6, 12, 4);
     } else {
       ctx.fillRect(this.x - 8, bodyY + 6, 12, 4);
@@ -117,26 +141,26 @@ export class Player {
 
     // Shoes
     ctx.fillStyle = '#78350f';
-    ctx.fillRect(this.x + 2, this.y + this.height - 4, 10, 4);
-    ctx.fillRect(this.x + this.width - 12, this.y + this.height - 4, 10, 4);
+    ctx.fillRect(this.x + 2, drawY + this.height - 4, 10, 4);
+    ctx.fillRect(this.x + this.width - 12, drawY + this.height - 4, 10, 4);
 
     // Custom face
     if (this.faceImage.complete && this.faceImage.naturalWidth !== 0) {
       ctx.imageSmoothingEnabled = false;
       
       // Flip face if looking left
-      if (!this.facingRight) {
+      if (!drawFacingRight) {
         ctx.save();
-        ctx.translate(this.x + this.headSize / 2, this.y + this.headSize / 2);
+        ctx.translate(this.x + this.headSize / 2, drawY + this.headSize / 2);
         ctx.scale(-1, 1);
         ctx.drawImage(this.faceImage, -this.headSize / 2, -this.headSize / 2, this.headSize, this.headSize);
         ctx.restore();
       } else {
-        ctx.drawImage(this.faceImage, this.x, this.y, this.headSize, this.headSize);
+        ctx.drawImage(this.faceImage, this.x, drawY, this.headSize, this.headSize);
       }
     } else {
       ctx.fillStyle = '#fca5a5';
-      ctx.fillRect(this.x, this.y, this.headSize, this.headSize);
+      ctx.fillRect(this.x, drawY, this.headSize, this.headSize);
     }
 
     // Draw Health Bar
