@@ -55,13 +55,28 @@
           <button id="btn-retake" class="btn secondary" style="margin-top:0.5rem; width:100%;">Retake</button>
         </div>
 
-        <div id="audio-section" class="hidden" style="margin-top: 1rem; text-align: center;">
+        <div id="audio-section" class="hidden" style="margin-top: 1rem; text-align: center; display: flex; flex-direction: column; align-items: center;">
           <h3 style="margin-bottom: 0.5rem;">Record Battle Cry</h3>
-          <p style="font-size: 0.9rem; margin-bottom: 1rem;">Hold to record a funny hit sound (max 2s)!</p>
-          <button id="btn-record-audio" class="btn primary" style="width:100%; margin-bottom: 1rem; user-select: none; -webkit-user-select: none;">🎤 Hold to Record</button>
-          <audio id="audio-preview" controls class="hidden" style="width: 100%; margin-bottom: 1rem;"></audio>
-          <button id="btn-audio-next" class="btn action">Continue</button>
-          <button id="btn-audio-skip" class="btn secondary" style="margin-top:0.5rem; width:100%;">Skip</button>
+          <p id="audio-instruction" style="font-size: 0.9rem; margin-bottom: 1.5rem; color: var(--text-muted);">Tap to record a funny hit sound (max 2s)!</p>
+          
+          <div class="recorder-container" style="position: relative; display: inline-flex; justify-content: center; align-items: center; margin-bottom: 1.5rem; width: 90px; height: 90px;">
+            <button id="btn-record-audio" class="btn-record" style="user-select: none; -webkit-user-select: none;">🎤</button>
+            <div id="recorder-pulse" class="recorder-pulse-ring"></div>
+          </div>
+          
+          <div id="recording-progress-container" class="hidden" style="width: 100%; max-width: 280px; margin-bottom: 1.5rem;">
+            <div class="progress-bar-bg" style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; position: relative;">
+              <div id="recording-progress-fill" style="width: 0%; height: 100%; background: #ef4444; position: absolute; left: 0; top: 0;"></div>
+            </div>
+            <span id="recording-timer" style="display: block; font-size: 0.85rem; color: #ef4444; font-weight: 600; margin-top: 0.5rem;">0.0s / 2.0s</span>
+          </div>
+
+          <audio id="audio-preview" controls class="hidden" style="width: 100%; max-width: 320px; margin-bottom: 1.5rem; border-radius: 8px;"></audio>
+          
+          <div style="width: 100%; display: flex; flex-direction: column; gap: 0.5rem; max-width: 320px;">
+            <button id="btn-audio-next" class="btn action">Continue</button>
+            <button id="btn-audio-skip" class="btn secondary" style="width:100%;">Skip</button>
+          </div>
         </div>
 
         <div id="mode-section" class="hidden" style="text-align: left; margin-top: 1rem;">
