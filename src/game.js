@@ -42,6 +42,14 @@ export class Game {
     this.screenShake = 0;
 
     this.customAudio = customAudioUrl;
+    this.customAudioBuffer = null;
+    if (this.customAudio) {
+      audio.decodeAudio(this.customAudio).then(buf => {
+        this.customAudioBuffer = buf;
+      }).catch(err => {
+        console.error("Error decoding local custom audio:", err);
+      });
+    }
   }
 
   emitJoin() {
@@ -99,6 +107,14 @@ export class Game {
             const rp = new RemotePlayer(p.x, p.y, cleanFaceUrl, p.team, p.health, p.isAlive);
             this.remotePlayers[id] = rp;
             rp.customAudio = p.customAudio;
+            rp.customAudioBuffer = null;
+            if (p.customAudio) {
+              audio.decodeAudio(p.customAudio).then(buf => {
+                rp.customAudioBuffer = buf;
+              }).catch(err => {
+                console.error(`Error decoding remote player ${id} audio:`, err);
+              });
+            }
             console.log(`Socket: Added remote player ${id} in room ${pRoomId}`);
           } else {
             console.log(`Socket: Ignored player ${id} from different room: ${pRoomId}`);
@@ -119,6 +135,14 @@ export class Game {
           const rp = new RemotePlayer(p.x, p.y, cleanFaceUrl, p.team, p.health, p.isAlive);
           this.remotePlayers[info.id] = rp;
           rp.customAudio = p.customAudio;
+          rp.customAudioBuffer = null;
+          if (p.customAudio) {
+            audio.decodeAudio(p.customAudio).then(buf => {
+              rp.customAudioBuffer = buf;
+            }).catch(err => {
+              console.error(`Error decoding remote player ${info.id} audio:`, err);
+            });
+          }
           console.log(`Socket: Added new remote player ${info.id} in room ${pRoomId}`);
         } else {
           console.log(`Socket: Ignored new player ${info.id} from different room: ${pRoomId}`);
@@ -142,30 +166,48 @@ export class Game {
 
     this.socket.on('playerHealthUpdate', (data) => {
       if (data.id === this.socket.id) {
-        audio.playCustomHitUrl(this.customAudio);
+        if (this.customAudioBuffer) {
+          audio.playAudioBuffer(this.customAudioBuffer);
+        } else {
+          audio.playCustomHitUrl(this.customAudio);
+        }
         this.player.health = data.health;
         this.screenShake = 10;
         this.spawnParticles(this.player.x + 16, this.player.y + 24, '#ef4444');
       } else if (this.remotePlayers[data.id]) {
-        audio.playCustomHitUrl(this.remotePlayers[data.id].customAudio);
-        this.remotePlayers[data.id].health = data.health;
-        this.spawnParticles(this.remotePlayers[data.id].x + 16, this.remotePlayers[data.id].y + 24, '#ef4444');
+        const rp = this.remotePlayers[data.id];
+        if (rp.customAudioBuffer) {
+          audio.playAudioBuffer(rp.customAudioBuffer);
+        } else {
+          audio.playCustomHitUrl(rp.customAudio);
+        }
+        rp.health = data.health;
+        this.spawnParticles(rp.x + 16, rp.y + 24, '#ef4444');
       }
     });
 
     this.socket.on('playerDied', (id) => {
       let diedTeam = null;
       if (id === this.socket.id) {
-        audio.playCustomHitUrl(this.customAudio);
+        if (this.customAudioBuffer) {
+          audio.playAudioBuffer(this.customAudioBuffer);
+        } else {
+          audio.playCustomHitUrl(this.customAudio);
+        }
         this.player.isAlive = false;
         diedTeam = this.player.team;
         this.screenShake = 20;
         this.spawnParticles(this.player.x + 16, this.player.y + 24, '#ef4444', 20);
       } else if (this.remotePlayers[id]) {
-        audio.playCustomHitUrl(this.remotePlayers[id].customAudio);
-        this.remotePlayers[id].isAlive = false;
-        diedTeam = this.remotePlayers[id].team;
-        this.spawnParticles(this.remotePlayers[id].x + 16, this.remotePlayers[id].y + 24, '#ef4444', 20);
+        const rp = this.remotePlayers[id];
+        if (rp.customAudioBuffer) {
+          audio.playAudioBuffer(rp.customAudioBuffer);
+        } else {
+          audio.playCustomHitUrl(rp.customAudio);
+        }
+        rp.isAlive = false;
+        diedTeam = rp.team;
+        this.spawnParticles(rp.x + 16, rp.y + 24, '#ef4444', 20);
       }
 
       if (diedTeam === 'red') this.scoreBlue++;
