@@ -14,8 +14,8 @@ const io = new Server(httpServer, {
 const players = {};
 
 io.on('connection', (socket) => {
-  socket.on('join', (data) => {
-    if (!data || !data.x || !data.y || !data.team) return;
+  socket.on('join', async (data) => {
+    if (!data || data.x === undefined || data.y === undefined || !data.team) return;
     
     players[socket.id] = {
       x: data.x,
@@ -29,7 +29,7 @@ io.on('connection', (socket) => {
     };
     
     const room = data.roomId || 'global';
-    socket.join(room);
+    await socket.join(room);
     
     const roomPlayers = {};
     for (const id in players) {
