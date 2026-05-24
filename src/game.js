@@ -40,6 +40,8 @@ export class Game {
     this.scoreBlue = 0;
     this.particles = [];
     this.screenShake = 0;
+    this.celebrationTimer = 0;
+    this.winningTeam = null;
 
     this.customAudio = customAudioUrl;
     this.customAudioBuffer = null;
@@ -238,6 +240,17 @@ export class Game {
       }
     });
 
+    this.socket.on('playerExpressedEmotion', (data) => {
+      console.log(`[Emote Network] Received remote emote broadcast:`, data);
+      if (this.remotePlayers[data.id]) {
+        this.remotePlayers[data.id].activeEmoji = data.emoji;
+        this.remotePlayers[data.id].emojiTimer = 2.5;
+        this.remotePlayers[data.id].emojiTimeAccumulator = 0;
+      } else {
+        console.warn(`[Emote Network] Remote player ID ${data.id} not found in this client's remotePlayers map. Available IDs:`, Object.keys(this.remotePlayers));
+      }
+    });
+
     this.socket.on('gameOver', (message) => {
       // Handled locally now via triggerGameOver
     });
@@ -248,6 +261,36 @@ export class Game {
     this.isGameOver = true;
     audio.stopBGM();
     
+    this.celebrationTimer = 2.0;
+    this.winningTeam = winner;
+    this.bullets = []; // Clear current bullets to focus on celebration
+
+    const isWinner = this.player.team.toLowerCase() === winner.toLowerCase();
+    if (isWinner) {
+      audio.playWin();
+    } else {
+      audio.playLose();
+    }
+
+    // Revive winning team and set to dance
+    if (this.player.team.toLowerCase() === winner.toLowerCase()) {
+      this.player.isAlive = true;
+      this.player.health = 100;
+      this.player.dancing = true;
+      this.player.danceTime = 0;
+    }
+    
+    Object.values(this.remotePlayers).forEach(rp => {
+      if (rp.team.toLowerCase() === winner.toLowerCase()) {
+        rp.isAlive = true;
+        rp.health = 100;
+        rp.dancing = true;
+        rp.danceTime = 0;
+      }
+    });
+  }
+
+  showGameOverCard(winner) {
     const isWinner = this.player.team.toLowerCase() === winner.toLowerCase();
     this.gameOverMessage = isWinner ? 'Victory!' : 'Defeat';
     
@@ -279,12 +322,39 @@ export class Game {
       card.style.display = 'flex';
       overlay.classList.remove('hidden');
     }
+  }
 
-    if (isWinner) {
-      audio.playWin();
-      this.player.dancing = true;
+  expressLocalEmotion(emoji) {
+    if (!this.player.isAlive || this.isGameOver) return;
+    
+    console.log(`[Emote Local] Player expressed emoji: ${emoji}`);
+    this.player.activeEmoji = emoji;
+    this.player.emojiTimer = 2.5;
+    this.player.emojiTimeAccumulator = 0;
+
+    if (this.socket && this.socket.connected) {
+      console.log(`[Emote Local] Emitting 'expressEmotion' to server:`, { emoji: emoji });
+      this.socket.emit('expressEmotion', { emoji: emoji });
     } else {
-      audio.playLose();
+      console.warn(`[Emote Local] Socket connection unavailable! Cannot broadcast emote.`);
+    }
+  }
+
+  spawnConfetti() {
+    if (Math.random() < 0.25) {
+      const colors = ['#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6', '#f43f5e', '#06b6d4'];
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+      this.particles.push({
+        x: Math.random() * this.canvas.width,
+        y: -10,
+        vx: (Math.random() - 0.5) * 100,
+        vy: 150 + Math.random() * 150,
+        life: 3.5,
+        color: randomColor,
+        isConfetti: true,
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 8
+      });
     }
   }
 
@@ -299,6 +369,8 @@ export class Game {
     this.particles = [];
     this.remotePlayers = {};
     this.isGameOver = false;
+    this.celebrationTimer = 0;
+    this.winningTeam = null;
     
     // Notify server we are respawning
     this.emitJoin();
@@ -333,7 +405,17 @@ export class Game {
       while (timeAccumulated > 0) {
         const step = Math.min(timeAccumulated, 0.016);
         this.player.update(step, this.input, this.map);
+        Object.values(this.remotePlayers).forEach(rp => rp.update(step));
         this.updateParticles(step);
+        
+        if (this.celebrationTimer > 0) {
+          this.celebrationTimer -= step;
+          this.spawnConfetti();
+          if (this.celebrationTimer <= 0) {
+            this.showGameOverCard(this.winningTeam);
+          }
+        }
+        
         timeAccumulated -= step;
       }
     } else {
@@ -444,9 +526,17 @@ export class Game {
     // Update particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
       let p = this.particles[i];
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.life -= dt * 2;
+      if (p.isConfetti) {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx += Math.sin(p.y / 30 + p.x) * 15 * dt;
+        p.rotation += p.rotationSpeed * dt;
+        p.life -= dt * 0.28;
+      } else {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= dt * 2;
+      }
       if (p.life <= 0) this.particles.splice(i, 1);
     }
 
@@ -468,12 +558,56 @@ export class Game {
     this.bullets.forEach(b => b.draw(this.ctx));
 
     this.particles.forEach(p => {
-      this.ctx.fillStyle = `rgba(239, 68, 68, ${p.life})`;
-      this.ctx.fillRect(p.x, p.y, 4, 4);
+      if (p.isConfetti) {
+        this.ctx.save();
+        this.ctx.translate(p.x, p.y);
+        this.ctx.rotate(p.rotation);
+        this.ctx.fillStyle = p.color;
+        this.ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
+        this.ctx.fillRect(-6, -3, 12, 6);
+        this.ctx.restore();
+      } else {
+        this.ctx.fillStyle = p.color || '#ef4444';
+        this.ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
+        this.ctx.fillRect(p.x, p.y, 4, 4);
+      }
     });
+    this.ctx.globalAlpha = 1.0;
 
     this.player.draw(this.ctx);
     this.ctx.restore();
+
+    // Draw Celebration Banner if in celebration window
+    if (this.isGameOver && this.celebrationTimer > 0 && this.winningTeam) {
+      this.ctx.save();
+      // Draw background ribbon
+      this.ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      this.ctx.fillRect(0, this.canvas.height / 2 - 70, this.canvas.width, 140);
+
+      const teamColor = this.winningTeam.toLowerCase() === 'red' ? '#ef4444' : '#3b82f6';
+      
+      // Top and bottom borders for the banner
+      this.ctx.fillStyle = teamColor;
+      this.ctx.fillRect(0, this.canvas.height / 2 - 70, this.canvas.width, 4);
+      this.ctx.fillRect(0, this.canvas.height / 2 + 66, this.canvas.width, 4);
+
+      // Text setup
+      this.ctx.font = '800 48px "Outfit", sans-serif';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      
+      // Draw text shadow
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      this.ctx.fillText(`${this.winningTeam.toUpperCase()} TEAM WINS!`, this.canvas.width / 2 + 3, this.canvas.height / 2 + 3);
+      
+      // Draw actual text with glow
+      this.ctx.shadowColor = teamColor;
+      this.ctx.shadowBlur = 15;
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fillText(`${this.winningTeam.toUpperCase()} TEAM WINS!`, this.canvas.width / 2, this.canvas.height / 2);
+      
+      this.ctx.restore();
+    }
 
     // Update Scores HUD in HTML
     const redHud = document.getElementById('hud-score-red');
